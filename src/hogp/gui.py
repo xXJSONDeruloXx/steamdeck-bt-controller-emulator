@@ -378,7 +378,7 @@ class VirtualTrackpad(Gtk.Box):
         self.gatt_app_getter = gatt_app_getter
         
         # Info label
-        info = Gtk.Label(label="Drag to move cursor • Tap to click • Scroll on right side")
+        info = Gtk.Label(label="Drag to move cursor • Tap to click • Double-tap & hold to drag • Scroll on right side")
         self.append(info)
         
         # Main horizontal box for trackpad + scroll wheel
@@ -397,15 +397,19 @@ class VirtualTrackpad(Gtk.Box):
         drag_controller.connect("drag-end", self._on_drag_end)
         self.trackpad.add_controller(drag_controller)
         
-        # Add click controller for tap-to-click
+        # Add click controller for tap-to-click and double-tap detection
         click_controller = Gtk.GestureClick()
         click_controller.connect("released", self._on_tap_click)
+        click_controller.connect("pressed", self._on_tap_press)
         self.trackpad.add_controller(click_controller)
         
         # Track last position for delta calculation
         self._last_x = 0
         self._last_y = 0
         self._is_dragging = False
+        self._drag_button_held = False  # Track if we're in drag mode (button held)
+        self._last_tap_time = 0
+        self._tap_count = 0
         
         trackpad_frame = Gtk.Frame()
         trackpad_frame.set_child(self.trackpad)
@@ -509,16 +513,43 @@ class VirtualTrackpad(Gtk.Box):
         if dx != 0 or dy != 0:
             gatt_app = self.gatt_app_getter()
             if gatt_app and gatt_app.notifying:
-                gatt_app.send_mouse_movement(dx, dy, 0, 0)
+                # If in drag mode, keep button pressed while moving
+                button_state = 0x01 if self._drag_button_held else 0
+                gatt_app.send_mouse_movement(dx, dy, button_state, 0)
     
     def _on_drag_end(self, gesture, offset_x, offset_y):
         """Handle drag end."""
         self._is_dragging = False
+        # If we were in drag mode, release the button
+        if self._drag_button_held:
+            self._drag_button_held = False
+            gatt_app = self.gatt_app_getter()
+            if gatt_app and gatt_app.notifying:
+                gatt_app.send_mouse_movement(0, 0, 0, 0)
+    
+    def _on_tap_press(self, gesture, n_press, x, y):
+        """Handle tap press - detect double-tap and hold."""
+        import time
+        current_time = time.time()
+        
+        # Check if this is a double-tap (within 500ms)
+        if n_press == 2 or (current_time - self._last_tap_time < 0.5 and self._tap_count == 1):
+            # This is the second tap - enter drag mode
+            self._drag_button_held = True
+            self._tap_count = 0
+            # Press and hold the left button
+            gatt_app = self.gatt_app_getter()
+            if gatt_app and gatt_app.notifying:
+                gatt_app.send_mouse_movement(0, 0, 0x01, 0)
+        else:
+            self._tap_count = 1
+        
+        self._last_tap_time = current_time
     
     def _on_tap_click(self, gesture, n_press, x, y):
         """Handle tap to click (left click)."""
-        # Only trigger if we didn't drag
-        if not self._is_dragging:
+        # Only trigger single click if we didn't drag and not in drag mode
+        if not self._is_dragging and not self._drag_button_held and n_press == 1:
             self._send_click(0x01)  # Left click
     
     def _draw_scroll_area(self, area, cr, width, height, user_data):
