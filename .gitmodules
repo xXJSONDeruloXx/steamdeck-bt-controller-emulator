@@ -1,0 +1,12 @@
+[submodule "research/EmuBTHID"]
+	path = research/EmuBTHID
+	url = https://github.com/Alkaid-Benetnash/EmuBTHID.git
+[submodule "research/BTGamepad"]
+	path = research/BTGamepad
+	url = https://github.com/007durgesh219/BTGamepad.git
+[submodule "research/diyps3controller"]
+	path = research/diyps3controller
+	url = https://github.com/rafikel/diyps3controller.git
+[submodule "research/GIMX"]
+	path = research/GIMX
+	url = https://github.com/matlo/GIMX.git
