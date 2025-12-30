@@ -17,16 +17,17 @@ UDC_DEVICE=""  # Will be auto-detected
 # Get script directory before we cd elsewhere
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# USB IDs (using Xbox 360 controller for universal compatibility)
-VENDOR_ID="0x045e"   # Microsoft Corporation
-PRODUCT_ID="0x028e"  # Xbox 360 Controller
-DEVICE_BCD="0x0114"  # Device version 1.14 (Xbox 360)
+# USB IDs (using generic HID for Windows/Linux compatibility)
+# Using a common vendor ID that won't trigger proprietary drivers
+VENDOR_ID="0x1209"   # pid.codes (Open Source)
+PRODUCT_ID="0x0001"  # Generic HID Device
+DEVICE_BCD="0x0100"  # Device version 1.0
 USB_BCD="0x0200"     # USB 2.0
 
 # Strings
 SERIAL="steamdeck001"
-MANUFACTURER="Microsoft Corp."
-PRODUCT="Controller"
+MANUFACTURER="Steam Deck"
+PRODUCT="HID Controller"
 
 # Configuration
 CONFIG_NAME="c.1"
