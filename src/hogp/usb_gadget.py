@@ -53,10 +53,10 @@ class USBGadgetHID:
         self._kbd_reserved = 0  # Reserved byte (1 byte)
         self._kbd_keys = [0, 0, 0, 0, 0, 0]  # Up to 6 simultaneous keys (6 bytes)
         
-        # Mouse report (5 bytes total)
+        # Mouse report (7 bytes total)
         self._mouse_buttons = 0  # Button bitfield (1 byte)
-        self._mouse_x = 0  # X movement (signed 8-bit)
-        self._mouse_y = 0  # Y movement (signed 8-bit)
+        self._mouse_x = 0  # X movement (signed 16-bit)
+        self._mouse_y = 0  # Y movement (signed 16-bit)
         self._mouse_wheel = 0  # Wheel movement (signed 8-bit)
         self._mouse_h_wheel = 0  # Horizontal wheel (signed 8-bit)
 
@@ -122,6 +122,11 @@ class USBGadgetHID:
 
     def is_active(self) -> bool:
         """Check if USB gadget is active."""
+        return self._active
+    
+    @property
+    def notifying(self) -> bool:
+        """Check if USB gadget is active (GATT-compatible property)."""
         return self._active
 
     # === Gamepad Methods ===
@@ -290,15 +295,31 @@ class USBGadgetHID:
         Send mouse movement.
         
         Args:
-            x: X movement (-127 to 127)
-            y: Y movement (-127 to 127)
+            x: X movement (-32768 to 32767)
+            y: Y movement (-32768 to 32767)
             wheel: Wheel movement (-127 to 127)
-            h_wheel: Horizontal wheel movement (-127 to 127)
+            h_wheel: Unused (for compatibility)
         """
-        self._mouse_x = max(-127, min(127, x))
-        self._mouse_y = max(-127, min(127, y))
+        self._mouse_x = max(-32768, min(32767, x))
+        self._mouse_y = max(-32768, min(32767, y))
         self._mouse_wheel = max(-127, min(127, wheel))
         self._mouse_h_wheel = max(-127, min(127, h_wheel))
+        self._send_mouse_report()
+    
+    def send_mouse_movement(self, dx: int, dy: int, buttons: int = 0, wheel: int = 0) -> None:
+        """
+        Send mouse movement (GATT-compatible interface).
+        
+        Args:
+            dx: Relative X movement (-32768 to 32767)
+            dy: Relative Y movement (-32768 to 32767)
+            buttons: Button bitmask (0x01=left, 0x02=right, 0x04=middle)
+            wheel: Wheel movement (-127 to 127)
+        """
+        self._mouse_buttons = buttons & 0x07
+        self._mouse_x = max(-32768, min(32767, dx))
+        self._mouse_y = max(-32768, min(32767, dy))
+        self._mouse_wheel = max(-127, min(127, wheel))
         self._send_mouse_report()
 
     def send_mouse_click(self, buttons: int) -> None:
@@ -336,15 +357,16 @@ class USBGadgetHID:
         
         try:
             # Build report matching REPORT_MAP structure
-            # Report ID (3) + 1 byte buttons + 3 bytes movement (X, Y, wheel) = 5 bytes
-            report = bytearray(5)
+            # Report ID (3) + 1 byte buttons + 2 bytes X + 2 bytes Y + 1 byte wheel = 7 bytes
+            report = bytearray(7)
             report[0] = 0x03  # Report ID (mouse is ID 3)
             report[1] = self._mouse_buttons
             
-            # Pack signed 8-bit values
-            report[2] = self._mouse_x & 0xFF
-            report[3] = self._mouse_y & 0xFF
-            report[4] = self._mouse_wheel & 0xFF
+            # Pack signed 16-bit X and Y values (little-endian)
+            struct.pack_into('<hh', report, 2, self._mouse_x, self._mouse_y)
+            
+            # Pack signed 8-bit wheel value
+            report[6] = self._mouse_wheel & 0xFF
             
             os.write(self._fd, bytes(report))
             
