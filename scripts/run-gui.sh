@@ -2,7 +2,8 @@
 # Quick launcher for BT Controller Emulator GUI
 # Run this on the Steam Deck to launch the GUI
 
-cd "$(dirname "$0")"
+# Go to project root (parent of scripts directory)
+cd "$(dirname "$0")/.."
 
 # Check if running as root
 if [ "$EUID" -eq 0 ]; then
