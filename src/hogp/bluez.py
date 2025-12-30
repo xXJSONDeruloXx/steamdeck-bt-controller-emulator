@@ -6,6 +6,7 @@ deadlocks with GDBus on older glib versions.
 """
 
 import logging
+import subprocess
 from typing import Optional, Callable, Any
 
 from gi.repository import Gio, GLib
@@ -266,3 +267,100 @@ def ensure_adapter_powered_and_discoverable(bus: Gio.DBusConnection, adapter_pat
     # Make discoverable (optional for BLE, but helps)
     set_adapter_property(bus, adapter_path, "Discoverable", GLib.Variant("b", True))
     return True
+
+
+def get_adapter_index(adapter_name: str = "hci0") -> int:
+    """Extract adapter index from adapter name (e.g., 'hci0' -> 0)."""
+    if adapter_name.startswith("hci"):
+        try:
+            return int(adapter_name[3:])
+        except ValueError:
+            pass
+    return 0
+
+
+def check_static_address_set(adapter_index: int = 0) -> bool:
+    """
+    Check if a static BLE address is already configured.
+    Returns True if a static address is set, False otherwise.
+    """
+    try:
+        result = subprocess.run(
+            ["btmgmt", "--index", str(adapter_index), "info"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            # Look for "static-addr" in the output
+            return "static-addr" in result.stdout.lower()
+        return False
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+        logger.debug(f"Could not check static address status: {e}")
+        return False
+
+
+def set_static_ble_address(
+    adapter_index: int = 0,
+    address: str = "C2:12:34:56:78:9A",
+) -> bool:
+    """
+    Set a static BLE address for the adapter to prevent identity rotation.
+    
+    This prevents the device from appearing as a new controller on each connection.
+    Requires root/sudo privileges.
+    
+    Args:
+        adapter_index: BlueZ adapter index (0 for hci0, 1 for hci1, etc.)
+        address: Static random address (must have bit 1 set in first octet for locally administered)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Check if already set
+        if check_static_address_set(adapter_index):
+            logger.info(f"Static BLE address already configured for adapter {adapter_index}")
+            return True
+        
+        logger.info(f"Configuring static BLE address {address} for adapter {adapter_index}")
+        
+        # Power off adapter
+        subprocess.run(
+            ["btmgmt", "--index", str(adapter_index), "power", "off"],
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+        
+        # Set static address
+        result = subprocess.run(
+            ["btmgmt", "--index", str(adapter_index), "static-addr", address],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+        
+        # Power back on
+        subprocess.run(
+            ["btmgmt", "--index", str(adapter_index), "power", "on"],
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+        
+        if "successfully set" in result.stdout.lower() or result.returncode == 0:
+            logger.info(f"Successfully set static BLE address: {address}")
+            return True
+        else:
+            logger.warning(f"Static address command completed but may not have succeeded: {result.stdout}")
+            return False
+            
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to set static BLE address (requires sudo): {e}")
+        return False
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+        logger.warning(f"Could not set static BLE address: {e}")
+        return False
+

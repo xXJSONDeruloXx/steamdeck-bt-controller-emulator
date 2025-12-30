@@ -15,8 +15,10 @@ logger = logging.getLogger(__name__)
 LE_ADV_IFACE = "org.bluez.LEAdvertisement1"
 DBUS_PROPS_IFACE = "org.freedesktop.DBus.Properties"
 
-# Standard 16-bit UUID for HID Service
+# Standard 16-bit UUIDs
 HID_SERVICE_UUID_16 = "1812"
+DEVICE_INFO_SERVICE_UUID_16 = "180a"
+GAP_SERVICE_UUID_16 = "1800"
 
 
 class Advertisement:
@@ -43,7 +45,7 @@ class Advertisement:
         
         # Advertisement properties
         self._type = "peripheral"
-        self._service_uuids = [HID_SERVICE_UUID_16]
+        self._service_uuids = [HID_SERVICE_UUID_16, DEVICE_INFO_SERVICE_UUID_16, GAP_SERVICE_UUID_16]
         self._appearance = 0x03C4  # Gamepad appearance
         self._discoverable = True
         self._includes = ["tx-power"]

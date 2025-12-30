@@ -13,7 +13,3 @@ These projects were referenced during development:
 - [BTGamepad](https://github.com/007durgesh219/BTGamepad) - Android Bluetooth gamepad
 - [diyps3controller](https://github.com/rafikel/diyps3controller) - PS3 controller emulation
 - [GIMX](https://github.com/matlo/GIMX) - Game Input Multiplexer
-
-## License
-
-MIT License - see LICENSE file for details.

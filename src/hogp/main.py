@@ -23,6 +23,8 @@ from .bluez import (
     register_advertisement_async,
     unregister_advertisement_async,
     get_le_advertising_active_instances,
+    set_static_ble_address,
+    get_adapter_index,
 )
 from .gatt_app import GattApplication
 from .adv import Advertisement
@@ -43,11 +45,13 @@ class HoGPeripheral:
         name: str = "SteamDeckHoG",
         rate: int = 10,
         adapter: str = "hci0",
+        static_addr: Optional[str] = "C2:12:34:56:78:9A",
         verbose: bool = False,
     ):
         self.name = name
         self.rate = rate
         self.adapter = adapter
+        self.static_addr = static_addr
         self.verbose = verbose
         
         self._bus: Optional[GLib.DBusConnection] = None
@@ -90,13 +94,23 @@ class HoGPeripheral:
             return 1
         logger.info(f"Using adapter: {self._adapter_path}")
         
+        # Set static BLE address to prevent duplicate controller entries
+        if self.static_addr:
+            adapter_idx = get_adapter_index(self.adapter)
+            if set_static_ble_address(adapter_idx, self.static_addr):
+                logger.info(f"Static BLE address configured: {self.static_addr}")
+            else:
+                logger.warning("Could not set static BLE address - device may appear as duplicate controller on reconnect")
+        else:
+            logger.info("Static BLE address not configured (--no-static-addr)")
+        
         # Ensure adapter is powered
         if not ensure_adapter_powered_and_discoverable(self._bus, self._adapter_path):
             logger.error("Failed to power on adapter")
             return 1
         
         # Create GATT application
-        self._gatt_app = GattApplication(self._bus, verbose=self.verbose)
+        self._gatt_app = GattApplication(self._bus, device_name=self.name, verbose=self.verbose)
         self._gatt_app.set_report_rate(self.rate)
         
         if not self._gatt_app.register():
@@ -344,6 +358,16 @@ Verification commands (run in another terminal):
         help="Bluetooth adapter name (default: hci0)",
     )
     parser.add_argument(
+        "--static-addr",
+        default="C2:12:34:56:78:9A",
+        help="Static BLE address to prevent duplicate controllers (default: C2:12:34:56:78:9A)",
+    )
+    parser.add_argument(
+        "--no-static-addr",
+        action="store_true",
+        help="Skip setting static BLE address",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose logging",
@@ -355,6 +379,7 @@ Verification commands (run in another terminal):
         name=args.name,
         rate=args.rate,
         adapter=args.adapter,
+        static_addr=None if args.no_static_addr else args.static_addr,
         verbose=args.verbose,
     )
     

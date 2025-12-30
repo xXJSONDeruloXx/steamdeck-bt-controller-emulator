@@ -24,6 +24,16 @@ HID_CONTROL_POINT_UUID = "00002a4c-0000-1000-8000-00805f9b34fb"
 REPORT_UUID = "00002a4d-0000-1000-8000-00805f9b34fb"
 REPORT_REFERENCE_UUID = "00002908-0000-1000-8000-00805f9b34fb"
 
+# Generic Access Profile (GAP) UUIDs
+GAP_SERVICE_UUID = "00001800-0000-1000-8000-00805f9b34fb"
+DEVICE_NAME_UUID = "00002a00-0000-1000-8000-00805f9b34fb"
+
+# Device Information Service UUIDs
+DEVICE_INFO_SERVICE_UUID = "0000180a-0000-1000-8000-00805f9b34fb"
+MANUFACTURER_NAME_UUID = "00002a29-0000-1000-8000-00805f9b34fb"
+MODEL_NUMBER_UUID = "00002a24-0000-1000-8000-00805f9b34fb"
+PNP_ID_UUID = "00002a50-0000-1000-8000-00805f9b34fb"
+
 # D-Bus interfaces
 GATT_SERVICE_IFACE = "org.bluez.GattService1"
 GATT_CHAR_IFACE = "org.bluez.GattCharacteristic1"
@@ -66,6 +76,12 @@ REPORT_MAP = bytes([
 # HID Information: bcdHID=1.11, bCountryCode=0, Flags=0x02 (normally connectable)
 HID_INFO = bytes([0x11, 0x01, 0x00, 0x02])
 
+# Device Information values
+MANUFACTURER_NAME = b"SteamDeck"
+MODEL_NUMBER = b"HoG_Controller"
+# PnP ID: Vendor ID Source (Bluetooth SIG), Vendor ID (0x28DE = Valve), Product ID, Product Version
+PNP_ID = bytes([0x01, 0xDE, 0x28, 0x01, 0x00, 0x01, 0x00])  # Valve's VID
+
 
 class GattApplication:
     """
@@ -79,12 +95,19 @@ class GattApplication:
     - APP_PATH/service0/char2 (HID Control Point)
     - APP_PATH/service0/char3 (Report - with notifications)
     - APP_PATH/service0/char3/desc0 (Report Reference)
+    - APP_PATH/service1 (Device Information Service)
+    - APP_PATH/service1/char0 (Manufacturer Name)
+    - APP_PATH/service1/char1 (Model Number)
+    - APP_PATH/service1/char2 (PnP ID)
+    - APP_PATH/service2 (Generic Access Profile)
+    - APP_PATH/service2/char0 (Device Name)
     """
 
     APP_PATH = "/com/steamdeck/hogp"
 
-    def __init__(self, bus: Gio.DBusConnection, verbose: bool = False):
+    def __init__(self, bus: Gio.DBusConnection, device_name: str = "SteamDeckHoG", verbose: bool = False):
         self.bus = bus
+        self.device_name = device_name
         self.verbose = verbose
         self._registrations: List[int] = []
         self._notifying = False
@@ -131,6 +154,12 @@ class GattApplication:
             self._register_hid_control_point_char()
             self._register_report_char()
             self._register_report_reference_desc()
+            self._register_device_info_service()
+            self._register_dis_manufacturer_char()
+            self._register_dis_model_char()
+            self._register_dis_pnp_id_char()
+            self._register_gap_service()
+            self._register_gap_device_name_char()
             logger.info(f"GATT objects registered under {self.APP_PATH}")
             return True
         except Exception as e:
@@ -200,6 +229,12 @@ class GattApplication:
         char2_path = f"{service_path}/char2"
         char3_path = f"{service_path}/char3"
         desc0_path = f"{char3_path}/desc0"
+        
+        # Device Information Service paths
+        dis_service_path = f"{self.APP_PATH}/service1"
+        dis_char0_path = f"{dis_service_path}/char0"
+        dis_char1_path = f"{dis_service_path}/char1"
+        dis_char2_path = f"{dis_service_path}/char2"
 
         return {
             service_path: {
@@ -248,7 +283,61 @@ class GattApplication:
                     "Flags": GLib.Variant("as", ["read"]),
                 },
             },
+            dis_service_path: {
+                GATT_SERVICE_IFACE: {
+                    "UUID": GLib.Variant("s", DEVICE_INFO_SERVICE_UUID),
+                    "Primary": GLib.Variant("b", True),
+                    "Characteristics": GLib.Variant("ao", [dis_char0_path, dis_char1_path, dis_char2_path]),
+                },
+            },
+            dis_char0_path: {
+                GATT_CHAR_IFACE: {
+                    "UUID": GLib.Variant("s", MANUFACTURER_NAME_UUID),
+                    "Service": GLib.Variant("o", dis_service_path),
+                    "Flags": GLib.Variant("as", ["read"]),
+                    "Descriptors": GLib.Variant("ao", []),
+                },
+            },
+            dis_char1_path: {
+                GATT_CHAR_IFACE: {
+                    "UUID": GLib.Variant("s", MODEL_NUMBER_UUID),
+                    "Service": GLib.Variant("o", dis_service_path),
+                    "Flags": GLib.Variant("as", ["read"]),
+                    "Descriptors": GLib.Variant("ao", []),
+                },
+            },
+            dis_char2_path: {
+                GATT_CHAR_IFACE: {
+                    "UUID": GLib.Variant("s", PNP_ID_UUID),
+                    "Service": GLib.Variant("o", dis_service_path),
+                    "Flags": GLib.Variant("as", ["read"]),
+                    "Descriptors": GLib.Variant("ao", []),
+                },
+            },
         }
+        
+        # Add GAP service if registered
+        gap_service_path = f"{self.APP_PATH}/service2"
+        gap_char0_path = f"{gap_service_path}/char0"
+        
+        result = dict(result)  # Make mutable copy
+        result[gap_service_path] = {
+            GATT_SERVICE_IFACE: {
+                "UUID": GLib.Variant("s", GAP_SERVICE_UUID),
+                "Primary": GLib.Variant("b", True),
+                "Characteristics": GLib.Variant("ao", [gap_char0_path]),
+            },
+        }
+        result[gap_char0_path] = {
+            GATT_CHAR_IFACE: {
+                "UUID": GLib.Variant("s", DEVICE_NAME_UUID),
+                "Service": GLib.Variant("o", gap_service_path),
+                "Flags": GLib.Variant("as", ["read"]),
+                "Descriptors": GLib.Variant("ao", []),
+            },
+        }
+        
+        return result
 
     def _register_service(self) -> None:
         """Register HID Service object."""
@@ -657,6 +746,162 @@ class GattApplication:
         self._registrations.append(reg_id)
         reg_id = self.bus.register_object(path, node_info.interfaces[1], handler, None, None)
         self._registrations.append(reg_id)
+
+    def _register_device_info_service(self) -> None:
+        """Register Device Information Service."""
+        xml = f"""
+        <node>
+            <interface name="{GATT_SERVICE_IFACE}">
+                <property name="UUID" type="s" access="read"/>
+                <property name="Primary" type="b" access="read"/>
+                <property name="Characteristics" type="ao" access="read"/>
+            </interface>
+            <interface name="{DBUS_PROPS_IFACE}">
+                <method name="Get">
+                    <arg type="s" direction="in"/>
+                    <arg type="s" direction="in"/>
+                    <arg type="v" direction="out"/>
+                </method>
+                <method name="GetAll">
+                    <arg type="s" direction="in"/>
+                    <arg type="a{{sv}}" direction="out"/>
+                </method>
+            </interface>
+        </node>
+        """
+        node_info = Gio.DBusNodeInfo.new_for_xml(xml)
+        service_path = f"{self.APP_PATH}/service1"
+        
+        char0_path = f"{service_path}/char0"
+        char1_path = f"{service_path}/char1"
+        char2_path = f"{service_path}/char2"
+        
+        def handler(conn, sender, path, iface, method, params, invoc):
+            if iface == DBUS_PROPS_IFACE:
+                props = {
+                    "UUID": GLib.Variant("s", DEVICE_INFO_SERVICE_UUID),
+                    "Primary": GLib.Variant("b", True),
+                    "Characteristics": GLib.Variant("ao", [char0_path, char1_path, char2_path]),
+                }
+                if method == "Get":
+                    _, prop = params.unpack()
+                    if prop in props:
+                        invoc.return_value(GLib.Variant("(v)", (props[prop],)))
+                    else:
+                        invoc.return_dbus_error(
+                            "org.freedesktop.DBus.Error.InvalidArgs",
+                            f"Unknown property: {prop}",
+                        )
+                elif method == "GetAll":
+                    invoc.return_value(GLib.Variant("(a{sv})", (props,)))
+                else:
+                    invoc.return_dbus_error(
+                        "org.freedesktop.DBus.Error.UnknownMethod",
+                        f"Unknown method: {method}",
+                    )
+            else:
+                invoc.return_dbus_error(
+                    "org.freedesktop.DBus.Error.UnknownInterface",
+                    f"Unknown interface: {iface}",
+                )
+
+        reg_id = self.bus.register_object(service_path, node_info.interfaces[1], handler, None, None)
+        self._registrations.append(reg_id)
+
+    def _register_dis_manufacturer_char(self) -> None:
+        """Register Device Information Service - Manufacturer Name characteristic."""
+        self._register_read_char(
+            f"{self.APP_PATH}/service1/char0",
+            MANUFACTURER_NAME_UUID,
+            MANUFACTURER_NAME,
+            "DIS Manufacturer Name",
+        )
+
+    def _register_dis_model_char(self) -> None:
+        """Register Device Information Service - Model Number characteristic."""
+        self._register_read_char(
+            f"{self.APP_PATH}/service1/char1",
+            MODEL_NUMBER_UUID,
+            MODEL_NUMBER,
+            "DIS Model Number",
+        )
+
+    def _register_dis_pnp_id_char(self) -> None:
+        """Register Device Information Service - PnP ID characteristic."""
+        self._register_read_char(
+            f"{self.APP_PATH}/service1/char2",
+            PNP_ID_UUID,
+            PNP_ID,
+            "DIS PnP ID",
+        )
+
+    def _register_gap_service(self) -> None:
+        """Register Generic Access Profile (GAP) service."""
+        xml = f"""
+        <node>
+            <interface name="{GATT_SERVICE_IFACE}">
+                <property name="UUID" type="s" access="read"/>
+                <property name="Primary" type="b" access="read"/>
+                <property name="Characteristics" type="ao" access="read"/>
+            </interface>
+            <interface name="{DBUS_PROPS_IFACE}">
+                <method name="Get">
+                    <arg type="s" direction="in"/>
+                    <arg type="s" direction="in"/>
+                    <arg type="v" direction="out"/>
+                </method>
+                <method name="GetAll">
+                    <arg type="s" direction="in"/>
+                    <arg type="a{{sv}}" direction="out"/>
+                </method>
+            </interface>
+        </node>
+        """
+        node_info = Gio.DBusNodeInfo.new_for_xml(xml)
+        service_path = f"{self.APP_PATH}/service2"
+        
+        char0_path = f"{service_path}/char0"
+        
+        def handler(conn, sender, path, iface, method, params, invoc):
+            if iface == DBUS_PROPS_IFACE:
+                props = {
+                    "UUID": GLib.Variant("s", GAP_SERVICE_UUID),
+                    "Primary": GLib.Variant("b", True),
+                    "Characteristics": GLib.Variant("ao", [char0_path]),
+                }
+                if method == "Get":
+                    _, prop = params.unpack()
+                    if prop in props:
+                        invoc.return_value(GLib.Variant("(v)", (props[prop],)))
+                    else:
+                        invoc.return_dbus_error(
+                            "org.freedesktop.DBus.Error.InvalidArgs",
+                            f"Unknown property: {prop}",
+                        )
+                elif method == "GetAll":
+                    invoc.return_value(GLib.Variant("(a{sv})", (props,)))
+                else:
+                    invoc.return_dbus_error(
+                        "org.freedesktop.DBus.Error.UnknownMethod",
+                        f"Unknown method: {method}",
+                    )
+            else:
+                invoc.return_dbus_error(
+                    "org.freedesktop.DBus.Error.UnknownInterface",
+                    f"Unknown interface: {iface}",
+                )
+
+        reg_id = self.bus.register_object(service_path, node_info.interfaces[1], handler, None, None)
+        self._registrations.append(reg_id)
+
+    def _register_gap_device_name_char(self) -> None:
+        """Register GAP Device Name characteristic."""
+        self._register_read_char(
+            f"{self.APP_PATH}/service2/char0",
+            DEVICE_NAME_UUID,
+            self.device_name.encode('utf-8'),
+            "GAP Device Name",
+        )
 
     def start_notify(self) -> None:
         """Start sending notifications."""
