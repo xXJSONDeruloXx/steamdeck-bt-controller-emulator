@@ -6,6 +6,16 @@ set -e
 echo "=== BT Controller Emulator - Steam Deck Installer ==="
 echo
 
+# Check if running on Steam Deck
+if [ ! -f /etc/os-release ] || ! grep -q "SteamOS" /etc/os-release; then
+    echo "Warning: This doesn't appear to be SteamOS/Steam Deck"
+    read -p "Continue anyway? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
 # Determine install location
 if [ "$EUID" -eq 0 ]; then
     echo "Don't run this script as root (no sudo). Run as your regular user."
@@ -22,22 +32,24 @@ echo "Install location: $INSTALL_DIR"
 echo
 
 # Check if we're already in the install directory
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-if [ "$PROJECT_DIR" = "$INSTALL_DIR" ]; then
+CURRENT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ "$CURRENT_DIR" = "$INSTALL_DIR" ]; then
     echo "✓ Already in install directory, skipping file copy..."
 elif [ -d "$INSTALL_DIR" ]; then
-    echo "Updating existing installation at $INSTALL_DIR..."
-    # Force overwrite all files
-    cp -rf "$PROJECT_DIR"/* "$INSTALL_DIR/"
-    echo "✓ Files updated"
+    echo "Existing installation found at $INSTALL_DIR"
+    read -p "Update installation? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 0
+    fi
+    # Copy files
+    echo "Copying files..."
+    cp -r "$CURRENT_DIR"/* "$INSTALL_DIR/"
 else
     # New installation
     echo "Installing to $INSTALL_DIR..."
     mkdir -p "$INSTALL_DIR"
-    cp -r "$PROJECT_DIR"/* "$INSTALL_DIR/"
-    echo "✓ Files installed"
+    cp -r "$CURRENT_DIR"/* "$INSTALL_DIR/"
 fi
 
 # Verify source files exist
@@ -58,6 +70,7 @@ python3 -c "import evdev" 2>/dev/null || DEPS_OK=false
 if [ "$DEPS_OK" = false ]; then
     echo "✗ Missing required Python dependencies"
     echo "  Required: python-gobject, gtk4, python-evdev"
+    echo "  These should be pre-installed on SteamOS 3.x"
     exit 1
 else
     echo "✓ All Python dependencies found"
@@ -67,6 +80,7 @@ fi
 echo
 echo "=== Configuring System Permissions ==="
 echo "This requires sudo access to set up proper permissions."
+echo "You'll run the app as a normal user (no pkexec/root needed)."
 echo
 
 # Add user to necessary groups
@@ -110,7 +124,7 @@ DBUS_POLICY="/etc/dbus-1/system.d/bt-controller-emulator.conf"
 if [ -f "$INSTALL_DIR/config/bt-controller-emulator-dbus.conf" ]; then
     # Create directory if it doesn't exist
     sudo mkdir -p /etc/dbus-1/system.d
-    sudo cp -f "$INSTALL_DIR/config/bt-controller-emulator-dbus.conf" "$DBUS_POLICY" || {
+    sudo cp "$INSTALL_DIR/config/bt-controller-emulator-dbus.conf" "$DBUS_POLICY" || {
         echo "✗ Failed to install D-Bus policy"
         exit 1
     }
@@ -127,18 +141,11 @@ SUDOERS_FILE="/etc/sudoers.d/bt-controller-emulator"
 if [ -f "$INSTALL_DIR/config/bt-controller-emulator-sudoers" ]; then
     # Create directory if it doesn't exist
     sudo mkdir -p /etc/sudoers.d
-    # Replace INSTALL_DIR_PLACEHOLDER with actual install directory
-    sed "s|INSTALL_DIR_PLACEHOLDER|$INSTALL_DIR|g" "$INSTALL_DIR/config/bt-controller-emulator-sudoers" | sudo tee "$SUDOERS_FILE" > /dev/null || {
+    sudo cp "$INSTALL_DIR/config/bt-controller-emulator-sudoers" "$SUDOERS_FILE" || {
         echo "✗ Failed to install sudoers rule"
         exit 1
     }
     sudo chmod 0440 "$SUDOERS_FILE"
-    # Validate sudoers syntax
-    if ! sudo visudo -c -f "$SUDOERS_FILE" > /dev/null 2>&1; then
-        echo "✗ Sudoers file has syntax errors!"
-        sudo cat "$SUDOERS_FILE"
-        exit 1
-    fi
     echo "✓ Sudoers rule installed: $SUDOERS_FILE"
 else
     echo "✗ Sudoers file not found!"
@@ -159,7 +166,6 @@ echo
 echo "Creating desktop launcher..."
 mkdir -p "$HOME/.local/share/applications"
 
-# Generate desktop file with actual install directory
 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Version=1.0
@@ -168,7 +174,6 @@ Name=BT Controller Emulator
 Comment=Bluetooth HID Controller Emulator for Steam Deck
 Icon=input-gaming
 Exec=$INSTALL_DIR/scripts/run-gui.sh
-Path=$INSTALL_DIR
 Terminal=false
 Categories=Game;Utility;
 Keywords=bluetooth;controller;gamepad;hid;
@@ -180,13 +185,12 @@ chmod +x "$DESKTOP_FILE"
 # Make scripts executable
 chmod +x "$INSTALL_DIR/scripts/run-gui.sh"
 chmod +x "$INSTALL_DIR/scripts/launcher-wrapper.sh"
-chmod +x "$INSTALL_DIR/scripts/bt-controller-emulator-btmgmt.sh"
 
 echo "✓ Desktop file created: $DESKTOP_FILE"
 
 # Create desktop shortcut (actual desktop icon) - automatically without prompting
 mkdir -p "$HOME/Desktop"
-cp -f "$DESKTOP_FILE" "$DESKTOP_SHORTCUT"
+cp "$DESKTOP_FILE" "$DESKTOP_SHORTCUT"
 chmod +x "$DESKTOP_SHORTCUT"
 echo "✓ Desktop shortcut created: $DESKTOP_SHORTCUT"
 
@@ -200,10 +204,8 @@ echo "=== Installation Complete! ==="
 echo
 
 if [ "${GROUPS_CHANGED:-false}" = true ]; then
-    echo "⚠ IMPORTANT: You were added to new groups (input, bluetooth)."
-    echo "   You MUST log out and log back in for changes to take effect!"
-    echo "   Or run: newgrp input && newgrp bluetooth"
-    echo
+    echo "⚠ Activating new group memberships..."
+    exec sg input -c "exec sg bluetooth -c 'echo; echo ✓ Groups activated; echo; echo The BT Controller Emulator now runs as a normal user (no root needed).; exec $SHELL'"
 fi
 
 echo "The BT Controller Emulator now runs as a normal user (no root needed)."

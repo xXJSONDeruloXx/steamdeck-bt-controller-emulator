@@ -6,9 +6,7 @@ deadlocks with GDBus on older glib versions.
 """
 
 import logging
-import os
 import subprocess
-from pathlib import Path
 from typing import Optional, Callable, Any, List, Dict
 
 from gi.repository import Gio, GLib
@@ -280,25 +278,6 @@ def get_adapter_index(adapter_name: str = "hci0") -> int:
             pass
     return 0
 
-def get_btmgmt_wrapper() -> str:
-    """Get path to the secure btmgmt wrapper script."""
-    # Try to find the wrapper script in the expected location
-    # First check relative to this file (for development)
-    current_dir = Path(__file__).parent.parent.parent
-    wrapper_path = current_dir / "scripts" / "bt-controller-emulator-btmgmt.sh"
-    
-    if wrapper_path.exists():
-        return str(wrapper_path)
-    
-    # Fallback to home directory installation
-    home_dir = Path.home()
-    wrapper_path = home_dir / "steamdeck-bt-controller-emulator" / "scripts" / "bt-controller-emulator-btmgmt.sh"
-    
-    if wrapper_path.exists():
-        return str(wrapper_path)
-    
-    # If not found, return the expected path anyway (will fail with clear error)
-    return str(wrapper_path)
 
 def check_static_address_set(adapter_index: int = 0) -> bool:
     """
@@ -306,9 +285,8 @@ def check_static_address_set(adapter_index: int = 0) -> bool:
     Returns True if a static address is set, False otherwise.
     """
     try:
-        wrapper = get_btmgmt_wrapper()
         result = subprocess.run(
-            ["sudo", wrapper, "info", str(adapter_index)],
+            ["btmgmt", "--index", str(adapter_index), "info"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -330,7 +308,7 @@ def set_static_ble_address(
     Set a static BLE address for the adapter to prevent identity rotation.
     
     This prevents the device from appearing as a new controller on each connection.
-    Uses a secure wrapper script that validates inputs before calling btmgmt.
+    Uses sudo for btmgmt commands (passwordless via sudoers configuration).
     
     Args:
         adapter_index: BlueZ adapter index (0 for hci0, 1 for hci1, etc.)
@@ -347,29 +325,26 @@ def set_static_ble_address(
         
         logger.info(f"Configuring static BLE address {address} for adapter {adapter_index}")
         
-        # Get wrapper script path
-        wrapper = get_btmgmt_wrapper()
-        
-        # Power off adapter (use sudo + wrapper)
+        # Power off adapter (use sudo)
         subprocess.run(
-            ["sudo", wrapper, "power", str(adapter_index), "off"],
+            ["sudo", "btmgmt", "--index", str(adapter_index), "power", "off"],
             capture_output=True,
             timeout=5,
             check=True,
         )
         
-        # Set static address (use sudo + wrapper)
+        # Set static address (use sudo)
         result = subprocess.run(
-            ["sudo", wrapper, "static-addr", str(adapter_index), address],
+            ["sudo", "btmgmt", "--index", str(adapter_index), "static-addr", address],
             capture_output=True,
             text=True,
             timeout=5,
             check=True,
         )
         
-        # Power back on (use sudo + wrapper)
+        # Power back on (use sudo)
         subprocess.run(
-            ["sudo", wrapper, "power", str(adapter_index), "on"],
+            ["sudo", "btmgmt", "--index", str(adapter_index), "power", "on"],
             capture_output=True,
             timeout=5,
             check=True,
@@ -383,7 +358,7 @@ def set_static_ble_address(
             return False
             
     except subprocess.CalledProcessError as e:
-        logger.warning(f"Failed to set static BLE address (requires sudo + wrapper): {e}")
+        logger.warning(f"Failed to set static BLE address (requires sudo): {e}")
         return False
     except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
         logger.warning(f"Could not set static BLE address: {e}")
