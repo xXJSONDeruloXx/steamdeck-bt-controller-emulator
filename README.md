@@ -8,6 +8,10 @@ This is a HID-over-GATT profile implementation using BlueZ D-Bus APIs. Primarily
 
 ## Installation
 
+Do Not Blindly Run Scripts You Find On The Internet! Review its contents first!
+
+Copy the following script and paste into your terminal (konsole on Steam Deck).
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xXJSONDeruloXx/steamdeck-bt-controller-emulator/main/install.sh | bash
 ```
@@ -20,7 +24,13 @@ Update by running the same command. Uninstall with `cd ~/steamdeck-bt-controller
 
 ## Usage
 
-Launch from application menu or run `python3 -m src.hogp` directly. GUI provides connection management and input monitoring. CLI mode available for testing without `--gui` flag. Use `--forward /dev/input/eventX` to map physical controller.
+Launch from application menu, desktop shortcut or run `python3 -m src.hogp` directly. GUI provides connection management and input monitoring. 
+
+When application is open, press "Start Service", then on the device you want to control, open bluetooth settings. You shpuld either find something named SteamDeckPad or BlueZ 597. Connect to this and follow the prompts on both devices. 
+
+After a few seconds, the device should now recognize an hid controller over bluetooth, as well as a keyboard and mouse hid device. 
+
+CLI mode available for testing without `--gui` flag. Use `--forward /dev/input/eventX` to map physical controller.
 
 ## Troubleshooting
 
