@@ -21,7 +21,7 @@ deploy:
     @echo "📦 Deploying to {{deck_user}}@{{deck_host}}:{{deck_path}}"
     ssh {{deck_user}}@{{deck_host}} "mkdir -p {{deck_path}}/src"
     scp -r {{src_dir}}/hogp {{deck_user}}@{{deck_host}}:{{deck_path}}/src/
-    scp README.md FEATURES.md HID_KEYCODES.py {{deck_user}}@{{deck_host}}:{{deck_path}}/
+    scp README.md {{deck_user}}@{{deck_host}}:{{deck_path}}/ 2>/dev/null || true
     scp run-gui.sh install-deck.sh launcher-wrapper.sh bt-controller-emulator.desktop {{deck_user}}@{{deck_host}}:{{deck_path}}/
     @echo "✅ Deployment complete"
 

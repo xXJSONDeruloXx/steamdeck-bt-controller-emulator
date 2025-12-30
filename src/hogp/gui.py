@@ -70,157 +70,29 @@ MOD_LALT = 0x04
 MOD_LGUI = 0x08
 
 
-class ControllerVisualizer(Gtk.DrawingArea):
-    """Custom widget to visualize controller state."""
+class ControllerVisualizer(Gtk.Box):
+    """Placeholder widget for controller tab."""
     
     def __init__(self):
-        super().__init__()
-        self.set_size_request(600, 400)
-        self.set_draw_func(self._draw_func, None)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.set_margin_top(50)
+        self.set_margin_bottom(50)
+        self.set_margin_start(50)
+        self.set_margin_end(50)
         
-        # Controller state
-        self.buttons = 0
-        self.axes = [0, 0, 0, 0]
-        self.triggers = [0, 0]
-        self.hat = 0x0F
+        # Just show info text
+        info_label = Gtk.Label()
+        info_label.set_markup(
+            "<big>Controller Input Forwarding Active</big>\n\n"
+            "Physical controller inputs are being forwarded\n"
+            "when a device is connected via Bluetooth."
+        )
+        info_label.set_justify(Gtk.Justification.CENTER)
+        self.append(info_label)
         
     def update_state(self, buttons, axes, triggers, hat):
-        """Update controller state and redraw."""
-        self.buttons = buttons
-        self.axes = axes
-        self.triggers = triggers
-        self.hat = hat
-        self.queue_draw()
-    
-    def _draw_func(self, area, cr, width, height, user_data):
-        """Draw the controller visualization."""
-        # Background
-        cr.set_source_rgb(0.15, 0.15, 0.15)
-        cr.paint()
-        
-        # Draw controller outline
-        cr.set_source_rgb(0.3, 0.3, 0.3)
-        cr.set_line_width(2)
-        cr.rectangle(50, 50, width - 100, height - 100)
-        cr.stroke()
-        
-        # Button layout (simplified gamepad representation)
-        button_positions = [
-            (width - 150, height/2, "A"),      # 0: BTN_SOUTH
-            (width - 120, height/2 - 30, "B"), # 1: BTN_EAST
-            (width - 150, height/2 - 60, "X"), # 2: BTN_NORTH
-            (width - 180, height/2 - 30, "Y"), # 3: BTN_WEST
-            (100, 100, "LB"),                  # 4: BTN_TL
-            (width - 100, 100, "RB"),          # 5: BTN_TR
-            (width/2 - 60, height - 120, "⋮"), # 6: BTN_SELECT
-            (width/2 + 60, height - 120, "≡"), # 7: BTN_START
-            (width/2, height - 150, "◉"),      # 8: BTN_MODE
-            (180, height/2, "LS"),             # 9: BTN_THUMBL
-            (width - 180, height/2 + 80, "RS"),# 10: BTN_THUMBR
-        ]
-        
-        for i, (x, y, label) in enumerate(button_positions):
-            pressed = (self.buttons >> i) & 1
-            
-            # Draw button circle
-            if pressed:
-                cr.set_source_rgb(0.3, 0.8, 0.3)  # Green when pressed
-            else:
-                cr.set_source_rgb(0.5, 0.5, 0.5)  # Gray when released
-            
-            cr.arc(x, y, 15, 0, 2 * 3.14159)
-            cr.fill()
-            
-            # Draw label
-            cr.set_source_rgb(1, 1, 1)
-            cr.select_font_face("Sans", 0, 1)
-            cr.set_font_size(10)
-            extents = cr.text_extents(label)
-            cr.move_to(x - extents.width/2, y + extents.height/2)
-            cr.show_text(label)
-        
-        # Draw analog sticks
-        self._draw_stick(cr, 150, height/2 - 20, self.axes[0], self.axes[1], "Left")
-        self._draw_stick(cr, width - 150, height/2 + 80, self.axes[2], self.axes[3], "Right")
-        
-        # Draw triggers
-        self._draw_trigger(cr, 100, 60, self.triggers[0], "LT")
-        self._draw_trigger(cr, width - 100, 60, self.triggers[1], "RT")
-        
-        # Draw D-pad/HAT
-        self._draw_dpad(cr, 230, height/2 + 80, self.hat)
-    
-    def _draw_stick(self, cr, cx, cy, x_val, y_val, label):
-        """Draw an analog stick."""
-        # Outer circle
-        cr.set_source_rgb(0.3, 0.3, 0.3)
-        cr.arc(cx, cy, 30, 0, 2 * 3.14159)
-        cr.fill()
-        
-        # Inner position
-        # Convert -32768 to 32767 range to -1 to 1
-        norm_x = x_val / 32768.0
-        norm_y = y_val / 32768.0
-        
-        stick_x = cx + norm_x * 25
-        stick_y = cy + norm_y * 25
-        
-        cr.set_source_rgb(0.8, 0.3, 0.3)
-        cr.arc(stick_x, stick_y, 8, 0, 2 * 3.14159)
-        cr.fill()
-        
-        # Label
-        cr.set_source_rgb(0.7, 0.7, 0.7)
-        cr.set_font_size(9)
-        extents = cr.text_extents(label)
-        cr.move_to(cx - extents.width/2, cy + 50)
-        cr.show_text(label)
-    
-    def _draw_trigger(self, cr, cx, cy, value, label):
-        """Draw a trigger indicator."""
-        # Background
-        cr.set_source_rgb(0.3, 0.3, 0.3)
-        cr.rectangle(cx - 20, cy, 40, 10)
-        cr.fill()
-        
-        # Fill based on trigger value (0-255)
-        fill_width = (value / 255.0) * 40
-        cr.set_source_rgb(0.3, 0.8, 0.3)
-        cr.rectangle(cx - 20, cy, fill_width, 10)
-        cr.fill()
-        
-        # Label
-        cr.set_source_rgb(0.7, 0.7, 0.7)
-        cr.set_font_size(9)
-        extents = cr.text_extents(label)
-        cr.move_to(cx - extents.width/2, cy - 5)
-        cr.show_text(label)
-    
-    def _draw_dpad(self, cr, cx, cy, hat):
-        """Draw D-pad/HAT indicator."""
-        # Directions: 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW, 0x0F=center
-        directions = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]
-        
-        # Draw cross
-        cr.set_source_rgb(0.4, 0.4, 0.4)
-        cr.rectangle(cx - 5, cy - 20, 10, 40)  # Vertical
-        cr.rectangle(cx - 20, cy - 5, 40, 10)  # Horizontal
-        cr.fill()
-        
-        # Highlight active direction
-        if hat < 8:
-            cr.set_source_rgb(0.3, 0.8, 0.3)
-            angle = hat * 45 * (3.14159 / 180)
-            dx = 15 * (-1 if hat in [5,6,7] else 1 if hat in [1,2,3] else 0)
-            dy = 15 * (-1 if hat in [7,0,1] else 1 if hat in [3,4,5] else 0)
-            cr.arc(cx + dx, cy + dy, 6, 0, 2 * 3.14159)
-            cr.fill()
-        
-        # Label
-        cr.set_source_rgb(0.7, 0.7, 0.7)
-        cr.set_font_size(9)
-        cr.move_to(cx - 10, cy + 40)
-        cr.show_text("D-Pad")
+        """Placeholder method for compatibility."""
+        pass
 
 
 class VirtualKeyboard(Gtk.Box):
@@ -536,23 +408,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         
         # Controller tab
         self.visualizer = ControllerVisualizer()
-        controller_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        controller_box.set_margin_top(6)
-        controller_box.set_margin_bottom(6)
-        controller_box.set_margin_start(6)
-        controller_box.set_margin_end(6)
-        
-        frame = Gtk.Frame()
-        frame.set_child(self.visualizer)
-        controller_box.append(frame)
-        
-        info_label = Gtk.Label(
-            label="Physical controller inputs are forwarded when active"
-        )
-        info_label.set_wrap(True)
-        controller_box.append(info_label)
-        
-        notebook.append_page(controller_box, Gtk.Label(label="Controller"))
+        notebook.append_page(self.visualizer, Gtk.Label(label="Controller"))
         
         # Keyboard tab
         self.keyboard = VirtualKeyboard(lambda: self._gatt_app)
