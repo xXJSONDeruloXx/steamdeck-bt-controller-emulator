@@ -19,9 +19,10 @@ default:
 # Deploy source code to Steam Deck
 deploy:
     @echo "📦 Deploying to {{deck_user}}@{{deck_host}}:{{deck_path}}"
-    ssh {{deck_user}}@{{deck_host}} "mkdir -p {{deck_path}}/src"
+    ssh {{deck_user}}@{{deck_host}} "mkdir -p {{deck_path}}/src {{deck_path}}/scripts {{deck_path}}/config"
     scp -r {{src_dir}}/hogp {{deck_user}}@{{deck_host}}:{{deck_path}}/src/
-    scp *.sh *.md *.conf *.desktop *-sudoers *.py {{deck_user}}@{{deck_host}}:{{deck_path}}/ 2>/dev/null || true
+    scp scripts/*.sh {{deck_user}}@{{deck_host}}:{{deck_path}}/scripts/
+    scp config/* {{deck_user}}@{{deck_host}}:{{deck_path}}/config/
     @echo "✅ Deployment complete"
 
 # Deploy only modified files (quick sync)

@@ -121,10 +121,10 @@ fi
 echo
 echo "Installing D-Bus policy for BlueZ GATT operations..."
 DBUS_POLICY="/etc/dbus-1/system.d/bt-controller-emulator.conf"
-if [ -f "$INSTALL_DIR/bt-controller-emulator-dbus.conf" ]; then
+if [ -f "$INSTALL_DIR/config/bt-controller-emulator-dbus.conf" ]; then
     # Create directory if it doesn't exist
     sudo mkdir -p /etc/dbus-1/system.d
-    sudo cp "$INSTALL_DIR/bt-controller-emulator-dbus.conf" "$DBUS_POLICY" || {
+    sudo cp "$INSTALL_DIR/config/bt-controller-emulator-dbus.conf" "$DBUS_POLICY" || {
         echo "✗ Failed to install D-Bus policy"
         exit 1
     }
@@ -138,10 +138,10 @@ fi
 echo
 echo "Installing sudoers rule for btmgmt..."
 SUDOERS_FILE="/etc/sudoers.d/bt-controller-emulator"
-if [ -f "$INSTALL_DIR/bt-controller-emulator-sudoers" ]; then
+if [ -f "$INSTALL_DIR/config/bt-controller-emulator-sudoers" ]; then
     # Create directory if it doesn't exist
     sudo mkdir -p /etc/sudoers.d
-    sudo cp "$INSTALL_DIR/bt-controller-emulator-sudoers" "$SUDOERS_FILE" || {
+    sudo cp "$INSTALL_DIR/config/bt-controller-emulator-sudoers" "$SUDOERS_FILE" || {
         echo "✗ Failed to install sudoers rule"
         exit 1
     }
@@ -173,7 +173,7 @@ Type=Application
 Name=BT Controller Emulator
 Comment=Bluetooth HID Controller Emulator for Steam Deck
 Icon=input-gaming
-Exec=$INSTALL_DIR/run-gui.sh
+Exec=$INSTALL_DIR/scripts/run-gui.sh
 Terminal=false
 Categories=Game;Utility;
 Keywords=bluetooth;controller;gamepad;hid;
@@ -183,8 +183,8 @@ EOF
 chmod +x "$DESKTOP_FILE"
 
 # Make scripts executable
-chmod +x "$INSTALL_DIR/run-gui.sh"
-chmod +x "$INSTALL_DIR/launcher-wrapper.sh"
+chmod +x "$INSTALL_DIR/scripts/run-gui.sh"
+chmod +x "$INSTALL_DIR/scripts/launcher-wrapper.sh"
 
 echo "✓ Desktop file created: $DESKTOP_FILE"
 

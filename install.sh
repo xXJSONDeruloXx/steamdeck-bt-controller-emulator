@@ -84,12 +84,12 @@ fi
 
 # Install D-Bus policy
 sudo mkdir -p /etc/dbus-1/system.d
-sudo cp "$INSTALL_DIR/bt-controller-emulator-dbus.conf" /etc/dbus-1/system.d/bt-controller-emulator.conf
+sudo cp "$INSTALL_DIR/config/bt-controller-emulator-dbus.conf" /etc/dbus-1/system.d/bt-controller-emulator.conf
 echo "✓ D-Bus policy installed"
 
 # Install sudoers rule
 sudo mkdir -p /etc/sudoers.d
-sudo cp "$INSTALL_DIR/bt-controller-emulator-sudoers" /etc/sudoers.d/bt-controller-emulator
+sudo cp "$INSTALL_DIR/config/bt-controller-emulator-sudoers" /etc/sudoers.d/bt-controller-emulator
 sudo chmod 0440 /etc/sudoers.d/bt-controller-emulator
 echo "✓ Sudoers rule installed"
 
@@ -110,7 +110,7 @@ Type=Application
 Name=BT Controller Emulator
 Comment=Bluetooth HID Controller Emulator for Steam Deck
 Icon=input-gaming
-Exec=$INSTALL_DIR/run-gui.sh
+Exec=$INSTALL_DIR/scripts/run-gui.sh
 Terminal=false
 Categories=Game;Utility;
 Keywords=bluetooth;controller;gamepad;hid;
@@ -121,8 +121,8 @@ chmod +x "$DESKTOP_FILE"
 cp "$DESKTOP_FILE" "$HOME/Desktop/bt-controller-emulator.desktop"
 chmod +x "$HOME/Desktop/bt-controller-emulator.desktop"
 
-chmod +x "$INSTALL_DIR/run-gui.sh"
-chmod +x "$INSTALL_DIR/launcher-wrapper.sh"
+chmod +x "$INSTALL_DIR/scripts/run-gui.sh"
+chmod +x "$INSTALL_DIR/scripts/launcher-wrapper.sh"
 
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 
