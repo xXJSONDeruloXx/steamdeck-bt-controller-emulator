@@ -406,7 +406,8 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
     
     def __init__(self, app):
         super().__init__(application=app, title="BT Controller Emulator")
-        self.set_default_size(700, 550)
+        # Steam Deck optimized size (1280x800 native resolution, use ~80% for window)
+        self.set_default_size(1024, 650)
         # Allow window resizing
         self.set_resizable(True)
         
