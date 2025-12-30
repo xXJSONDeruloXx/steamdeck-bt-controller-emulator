@@ -53,6 +53,8 @@ HID_KEY_CODES = {
     'F5': 0x3e, 'F6': 0x3f, 'F7': 0x40, 'F8': 0x41,
     'F9': 0x42, 'F10': 0x43, 'F11': 0x44, 'F12': 0x45,
     'Left': 0x50, 'Right': 0x4f, 'Up': 0x52, 'Down': 0x51,
+    # Media/Volume keys
+    'VolUp': 0x80, 'VolDown': 0x81, 'Mute': 0x7f,
 }
 
 # Modifier keys (bitmask)
@@ -223,11 +225,11 @@ class VirtualKeyboard(Gtk.Box):
         shortcuts_label.set_markup("<b>Shortcuts</b>")
         self.append(shortcuts_label)
         
-        shortcuts_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        shortcuts_box.set_halign(Gtk.Align.CENTER)
+        # First row: Copy, Paste, Cut, Select All, Super
+        shortcuts_row1 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        shortcuts_row1.set_halign(Gtk.Align.CENTER)
         
-        # Common shortcuts
-        shortcuts = [
+        shortcuts1 = [
             ('Copy', 'c', MOD_LCTRL),
             ('Paste', 'v', MOD_LCTRL),
             ('Cut', 'x', MOD_LCTRL),
@@ -235,16 +237,34 @@ class VirtualKeyboard(Gtk.Box):
             ('Super', None, MOD_LGUI),
         ]
         
-        for label, key, modifier in shortcuts:
+        for label, key, modifier in shortcuts1:
             btn = Gtk.Button(label=label)
             if key:
                 btn.connect("clicked", lambda b, k=key, m=modifier: self._send_shortcut(k, m))
             else:
                 # Super key - just press modifier
                 btn.connect("clicked", lambda b, m=modifier: self._send_modifier_only(m))
-            shortcuts_box.append(btn)
+            shortcuts_row1.append(btn)
         
-        self.append(shortcuts_box)
+        self.append(shortcuts_row1)
+        
+        # Second row: Volume controls
+        shortcuts_row2 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        shortcuts_row2.set_halign(Gtk.Align.CENTER)
+        shortcuts_row2.set_margin_top(4)
+        
+        shortcuts2 = [
+            ('Vol+', 'VolUp', 0),
+            ('Vol-', 'VolDown', 0),
+            ('Mute', 'Mute', 0),
+        ]
+        
+        for label, key, modifier in shortcuts2:
+            btn = Gtk.Button(label=label)
+            btn.connect("clicked", lambda b, k=key, m=modifier: self._send_shortcut(k, m))
+            shortcuts_row2.append(btn)
+        
+        self.append(shortcuts_row2)
     
     def _create_key_button(self, key):
         """Create a button for a keyboard key."""
