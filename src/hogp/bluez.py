@@ -308,7 +308,7 @@ def set_static_ble_address(
     Set a static BLE address for the adapter to prevent identity rotation.
     
     This prevents the device from appearing as a new controller on each connection.
-    Requires root/sudo privileges.
+    Uses sudo for btmgmt commands (passwordless via sudoers configuration).
     
     Args:
         adapter_index: BlueZ adapter index (0 for hci0, 1 for hci1, etc.)
@@ -325,26 +325,26 @@ def set_static_ble_address(
         
         logger.info(f"Configuring static BLE address {address} for adapter {adapter_index}")
         
-        # Power off adapter
+        # Power off adapter (use sudo)
         subprocess.run(
-            ["btmgmt", "--index", str(adapter_index), "power", "off"],
+            ["sudo", "btmgmt", "--index", str(adapter_index), "power", "off"],
             capture_output=True,
             timeout=5,
             check=True,
         )
         
-        # Set static address
+        # Set static address (use sudo)
         result = subprocess.run(
-            ["btmgmt", "--index", str(adapter_index), "static-addr", address],
+            ["sudo", "btmgmt", "--index", str(adapter_index), "static-addr", address],
             capture_output=True,
             text=True,
             timeout=5,
             check=True,
         )
         
-        # Power back on
+        # Power back on (use sudo)
         subprocess.run(
-            ["btmgmt", "--index", str(adapter_index), "power", "on"],
+            ["sudo", "btmgmt", "--index", str(adapter_index), "power", "on"],
             capture_output=True,
             timeout=5,
             check=True,

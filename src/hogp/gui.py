@@ -11,14 +11,6 @@ import os
 import threading
 from typing import Optional
 
-# Set up environment for root access BEFORE importing GTK
-if os.geteuid() == 0:
-    os.environ['GDK_BACKEND'] = 'x11'
-    os.environ['NO_AT_BRIDGE'] = '1'  # Disable accessibility bus (fails as root)
-    # Ensure XAUTHORITY is set
-    if 'XAUTHORITY' not in os.environ:
-        os.environ['XAUTHORITY'] = '/home/deck/.Xauthority'
-
 import gi
 
 gi.require_version('Gtk', '4.0')
@@ -238,7 +230,8 @@ class VirtualTrackpad(Gtk.Box):
         
         # Trackpad area
         self.trackpad = Gtk.DrawingArea()
-        self.trackpad.set_size_request(600, 400)
+        self.trackpad.set_size_request(500, 300)
+        self.trackpad.set_vexpand(True)
         self.trackpad.set_draw_func(self._draw_trackpad, None)
         
         # Add event controllers
@@ -356,7 +349,9 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
     
     def __init__(self, app):
         super().__init__(application=app, title="BT Controller Emulator")
-        self.set_default_size(700, 600)
+        self.set_default_size(700, 550)
+        # Allow window resizing
+        self.set_resizable(True)
         
         # State
         self._bus = None
@@ -375,11 +370,11 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
     def _build_ui(self):
         """Build the user interface."""
         # Main box
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        main_box.set_margin_top(12)
-        main_box.set_margin_bottom(12)
-        main_box.set_margin_start(12)
-        main_box.set_margin_end(12)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        main_box.set_margin_top(6)
+        main_box.set_margin_bottom(6)
+        main_box.set_margin_start(6)
+        main_box.set_margin_end(6)
         
         # Header bar
         header = Gtk.HeaderBar()
@@ -387,7 +382,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         self.set_titlebar(header)
         
         # Status box
-        status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         
         self.status_label = Gtk.Label(label="Status: Stopped")
         self.status_label.set_markup("<big><b>Status: Stopped</b></big>")

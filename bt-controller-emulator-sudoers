@@ -1,0 +1,3 @@
+# Allow bt-controller-emulator to run btmgmt without password
+# This is needed to set the static BLE address
+%bluetooth ALL=(root) NOPASSWD: /usr/bin/btmgmt

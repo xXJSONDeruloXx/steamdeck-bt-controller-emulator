@@ -22,7 +22,7 @@ deploy:
     ssh {{deck_user}}@{{deck_host}} "mkdir -p {{deck_path}}/src"
     scp -r {{src_dir}}/hogp {{deck_user}}@{{deck_host}}:{{deck_path}}/src/
     scp README.md {{deck_user}}@{{deck_host}}:{{deck_path}}/ 2>/dev/null || true
-    scp run-gui.sh install-deck.sh launcher-wrapper.sh bt-controller-emulator.desktop {{deck_user}}@{{deck_host}}:{{deck_path}}/
+    scp run-gui.sh install-deck.sh uninstall-deck.sh launcher-wrapper.sh bt-controller-emulator.desktop bt-controller-emulator-dbus.conf bt-controller-emulator-sudoers {{deck_user}}@{{deck_host}}:{{deck_path}}/
     @echo "✅ Deployment complete"
 
 # Deploy only modified files (quick sync)

@@ -6,17 +6,6 @@ This project implements a **HID-over-GATT (HoG) profile** peripheral using BlueZ
 4. Forwards physical controller inputs to the Bluetooth HoG device
 5. Provides a simple CLI for testing button presses and axis movements
 
-## Prerequisites
-
-**Required Python packages:**
-```bash
-# On Steam Deck / SteamOS:
-sudo pacman -S python-gobject python-dbus python-evdev
-
-# Or using pip:
-pip install PyGObject dbus-python evdev
-```
-
 ## Research References
 
 These projects were referenced during development:
