@@ -27,6 +27,9 @@ deploy:
 # Deploy and run immediately
 deploy-run: deploy run
 
+# Deploy and run with physical input forwarding
+deploy-run-input: deploy run-input
+
 # ============================================
 # Running on Steam Deck
 # ============================================
@@ -36,17 +39,40 @@ run name="SteamDeckHoG" rate="10":
     @echo "🎮 Starting HoG peripheral on Steam Deck..."
     ssh -t {{deck_user}}@{{deck_host}} "cd {{deck_path}} && sudo python3 -m src.hogp --name '{{name}}' --rate {{rate}} --verbose"
 
+# Run with physical input forwarding (auto-detect controller)
+run-input name="SteamDeckHoG" rate="10" device="auto":
+    @echo "🎮 Starting HoG peripheral with input forwarding..."
+    ssh -t {{deck_user}}@{{deck_host}} "cd {{deck_path}} && sudo python3 -m src.hogp --name '{{name}}' --rate {{rate}} --input-device {{device}} --verbose"
+
 # Run in background on Steam Deck
 run-background name="SteamDeckHoG" rate="10":
     @echo "🎮 Starting HoG peripheral in background..."
     ssh {{deck_user}}@{{deck_host}} "cd {{deck_path}} && sudo nohup python3 -m src.hogp --name '{{name}}' --rate {{rate}} > /tmp/hogp.log 2>&1 &"
     @echo "✅ Started. Use 'just logs' to view output or 'just stop' to stop."
 
+# Run with input forwarding in background
+run-input-background name="SteamDeckHoG" rate="10" device="auto":
+    @echo "🎮 Starting HoG peripheral with input forwarding in background..."
+    ssh {{deck_user}}@{{deck_host}} "cd {{deck_path}} && sudo nohup python3 -m src.hogp --name '{{name}}' --rate {{rate}} --input-device {{device}} > /tmp/hogp.log 2>&1 &"
+    @echo "✅ Started. Use 'just logs' to view output or 'just stop' to stop."
+
 # Stop the HoG peripheral on Steam Deck
 stop:
     @echo "🛑 Stopping HoG peripheral..."
-    ssh {{deck_user}}@{{deck_host}} "sudo pkill -f 'python3 -m src.hogp' || true"
+    ssh -t {{deck_user}}@{{deck_host}} "sudo pkill -f 'python3 -m src.hogp' || true"
     @echo "✅ Stopped"
+
+# Reset Bluetooth and static address on Steam Deck
+reset-bt:
+    @echo "🔄 Resetting Bluetooth on Steam Deck..."
+    ssh -t {{deck_user}}@{{deck_host}} "sudo systemctl restart bluetooth"
+    @echo "✅ Bluetooth restarted"
+
+# Force set static BLE address
+set-static-addr addr="C2:12:34:56:78:9A":
+    @echo "🔧 Setting static BLE address on Steam Deck..."
+    ssh -t {{deck_user}}@{{deck_host}} "sudo btmgmt --index 0 power off && sudo btmgmt --index 0 static-addr {{addr}} && sudo btmgmt --index 0 power on && sudo systemctl restart bluetooth"
+    @echo "✅ Static address set to {{addr}}"
 
 # ============================================
 # Monitoring & Debugging

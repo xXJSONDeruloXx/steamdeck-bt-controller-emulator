@@ -3,7 +3,19 @@ This project implements a **HID-over-GATT (HoG) profile** peripheral using BlueZ
 1. Advertises as a BLE peripheral named "SteamDeckHoG" (configurable)
 2. Exposes a GATT HID Service (UUID 0x1812) with standard characteristics
 3. Sends HID input reports via BLE notifications
-4. Provides a simple CLI for testing button presses and axis movements
+4. Forwards physical controller inputs to the Bluetooth HoG device
+5. Provides a simple CLI for testing button presses and axis movements
+
+## Prerequisites
+
+**Required Python packages:**
+```bash
+# On Steam Deck / SteamOS:
+sudo pacman -S python-gobject python-dbus python-evdev
+
+# Or using pip:
+pip install PyGObject dbus-python evdev
+```
 
 ## Research References
 

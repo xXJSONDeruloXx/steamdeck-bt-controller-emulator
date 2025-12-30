@@ -28,6 +28,7 @@ from .bluez import (
 )
 from .gatt_app import GattApplication
 from .adv import Advertisement
+from .input_handler import InputHandler
 
 logger = logging.getLogger(__name__)
 
@@ -46,18 +47,21 @@ class HoGPeripheral:
         rate: int = 10,
         adapter: str = "hci0",
         static_addr: Optional[str] = "C2:12:34:56:78:9A",
+        input_device: Optional[str] = None,
         verbose: bool = False,
     ):
         self.name = name
         self.rate = rate
         self.adapter = adapter
         self.static_addr = static_addr
+        self.input_device = input_device
         self.verbose = verbose
         
         self._bus: Optional[GLib.DBusConnection] = None
         self._adapter_path: Optional[str] = None
         self._gatt_app: Optional[GattApplication] = None
         self._advertisement: Optional[Advertisement] = None
+        self._input_handler: Optional[InputHandler] = None
         self._main_loop: Optional[GLib.MainLoop] = None
         self._registered = False
         self._shutting_down = False
@@ -127,6 +131,23 @@ class HoGPeripheral:
         # Setup signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
+        
+        # Setup input handler if input device specified or auto-detect enabled
+        if self.input_device or self.input_device != "none":
+            logger.info("Setting up physical input forwarding...")
+            self._input_handler = InputHandler(
+                device_path=self.input_device if self.input_device != "auto" else None,
+                on_button_change=self._on_physical_button,
+                on_axis_change=self._on_physical_axis,
+                verbose=self.verbose,
+            )
+            if self._input_handler.start():
+                logger.info("Physical input forwarding enabled")
+            else:
+                logger.warning("Could not start input handler, falling back to CLI-only mode")
+                self._input_handler = None
+        else:
+            logger.info("Physical input forwarding disabled (use --input-device to enable)")
         
         # Create main loop
         self._main_loop = GLib.MainLoop()
@@ -199,6 +220,11 @@ class HoGPeripheral:
         if self._test_pattern_id:
             GLib.source_remove(self._test_pattern_id)
             self._test_pattern_id = None
+        
+        # Stop input handler
+        if self._input_handler:
+            self._input_handler.stop()
+            self._input_handler = None
         
         # Unregister from BlueZ
         if self._registered and self._bus and self._adapter_path:
@@ -288,6 +314,20 @@ class HoGPeripheral:
             print("Test pattern started (cycling buttons and sweeping axis)")
         return False
 
+    def _on_physical_button(self, button_index: int, pressed: bool) -> None:
+        """Callback for physical button events."""
+        if self._gatt_app and not self._shutting_down:
+            self._gatt_app.set_button(button_index, pressed)
+            if self.verbose:
+                logger.debug(f"Physical button {button_index} {'pressed' if pressed else 'released'}")
+
+    def _on_physical_axis(self, axis_index: int, value: int) -> None:
+        """Callback for physical axis events."""
+        if self._gatt_app and not self._shutting_down:
+            self._gatt_app.set_axis(axis_index, value)
+            if self.verbose:
+                logger.debug(f"Physical axis {axis_index} = {value}")
+
     def _test_pattern_tick(self) -> bool:
         """Update test pattern state."""
         if self._shutting_down:
@@ -358,6 +398,11 @@ Verification commands (run in another terminal):
         help="Bluetooth adapter name (default: hci0)",
     )
     parser.add_argument(
+        "--input-device",
+        default="auto",
+        help="Input device path for physical controller forwarding (default: auto, use 'none' to disable)",
+    )
+    parser.add_argument(
         "--static-addr",
         default="C2:12:34:56:78:9A",
         help="Static BLE address to prevent duplicate controllers (default: C2:12:34:56:78:9A)",
@@ -380,6 +425,7 @@ Verification commands (run in another terminal):
         rate=args.rate,
         adapter=args.adapter,
         static_addr=None if args.no_static_addr else args.static_addr,
+        input_device=args.input_device,
         verbose=args.verbose,
     )
     
