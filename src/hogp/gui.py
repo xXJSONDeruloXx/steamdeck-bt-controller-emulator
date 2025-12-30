@@ -28,12 +28,37 @@ from hogp.bluez import (
     unregister_advertisement_async,
     set_static_ble_address,
     get_adapter_index,
+    get_primary_connected_device,
 )
 from hogp.gatt_app import GattApplication
 from hogp.adv import Advertisement
 from hogp.input_handler import InputHandler
 
 logger = logging.getLogger(__name__)
+
+# HID Keyboard key codes
+HID_KEY_CODES = {
+    'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08, 'f': 0x09,
+    'g': 0x0a, 'h': 0x0b, 'i': 0x0c, 'j': 0x0d, 'k': 0x0e, 'l': 0x0f,
+    'm': 0x10, 'n': 0x11, 'o': 0x12, 'p': 0x13, 'q': 0x14, 'r': 0x15,
+    's': 0x16, 't': 0x17, 'u': 0x18, 'v': 0x19, 'w': 0x1a, 'x': 0x1b,
+    'y': 0x1c, 'z': 0x1d,
+    '1': 0x1e, '2': 0x1f, '3': 0x20, '4': 0x21, '5': 0x22,
+    '6': 0x23, '7': 0x24, '8': 0x25, '9': 0x26, '0': 0x27,
+    'Enter': 0x28, 'Escape': 0x29, 'Backspace': 0x2a, 'Tab': 0x2b, 'Space': 0x2c,
+    '-': 0x2d, '=': 0x2e, '[': 0x2f, ']': 0x30, '\\': 0x31, ';': 0x33,
+    "'": 0x34, '`': 0x35, ',': 0x36, '.': 0x37, '/': 0x38,
+    'F1': 0x3a, 'F2': 0x3b, 'F3': 0x3c, 'F4': 0x3d,
+    'F5': 0x3e, 'F6': 0x3f, 'F7': 0x40, 'F8': 0x41,
+    'F9': 0x42, 'F10': 0x43, 'F11': 0x44, 'F12': 0x45,
+    'Left': 0x50, 'Right': 0x4f, 'Up': 0x52, 'Down': 0x51,
+}
+
+# Modifier keys (bitmask)
+MOD_LCTRL = 0x01
+MOD_LSHIFT = 0x02
+MOD_LALT = 0x04
+MOD_LGUI = 0x08
 
 
 class ControllerVisualizer(Gtk.DrawingArea):
@@ -189,6 +214,262 @@ class ControllerVisualizer(Gtk.DrawingArea):
         cr.show_text("D-Pad")
 
 
+class VirtualKeyboard(Gtk.Box):
+    """Virtual keyboard widget that sends HID keyboard reports."""
+    
+    def __init__(self, gatt_app_getter):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.set_margin_top(6)
+        self.set_margin_bottom(6)
+        self.set_margin_start(6)
+        self.set_margin_end(6)
+        
+        self.gatt_app_getter = gatt_app_getter
+        
+        # Text entry
+        entry_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        entry_label = Gtk.Label(label="Type text:")
+        entry_box.append(entry_label)
+        
+        self.text_entry = Gtk.Entry()
+        self.text_entry.set_hexpand(True)
+        self.text_entry.set_placeholder_text("Enter text to send...")
+        entry_box.append(self.text_entry)
+        
+        send_button = Gtk.Button(label="Send Text")
+        send_button.connect("clicked", self._on_send_text)
+        entry_box.append(send_button)
+        
+        self.append(entry_box)
+        
+        # Common keys
+        keys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        
+        # Row 1: Numbers
+        row1 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        row1.set_homogeneous(True)
+        for key in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']:
+            btn = self._create_key_button(key)
+            row1.append(btn)
+        keys_box.append(row1)
+        
+        # Row 2: QWERTY
+        row2 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        row2.set_homogeneous(True)
+        for key in ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p']:
+            btn = self._create_key_button(key)
+            row2.append(btn)
+        keys_box.append(row2)
+        
+        # Row 3: ASDFGH
+        row3 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        row3.set_homogeneous(True)
+        for key in ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l']:
+            btn = self._create_key_button(key)
+            row3.append(btn)
+        keys_box.append(row3)
+        
+        # Row 4: ZXCVBN
+        row4 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        row4.set_homogeneous(True)
+        for key in ['z', 'x', 'c', 'v', 'b', 'n', 'm']:
+            btn = self._create_key_button(key)
+            row4.append(btn)
+        keys_box.append(row4)
+        
+        # Row 5: Special keys
+        row5 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        row5.set_homogeneous(True)
+        for key in ['Space', 'Enter', 'Backspace', 'Tab', 'Escape']:
+            btn = self._create_key_button(key)
+            row5.append(btn)
+        keys_box.append(row5)
+        
+        # Row 6: Arrow keys
+        row6 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        row6.set_homogeneous(True)
+        for key in ['Left', 'Up', 'Down', 'Right']:
+            btn = self._create_key_button(key)
+            row6.append(btn)
+        keys_box.append(row6)
+        
+        self.append(keys_box)
+    
+    def _create_key_button(self, key):
+        """Create a button for a keyboard key."""
+        label = key.upper() if len(key) == 1 else key
+        btn = Gtk.Button(label=label)
+        btn.connect("clicked", lambda b: self._send_key(key))
+        return btn
+    
+    def _send_key(self, key):
+        """Send a single key press."""
+        gatt_app = self.gatt_app_getter()
+        if not gatt_app or not gatt_app.notifying:
+            return
+        
+        key_lower = key.lower()
+        key_code = HID_KEY_CODES.get(key_lower) or HID_KEY_CODES.get(key)
+        if key_code:
+            gatt_app.send_key(key_code, 0)
+    
+    def _on_send_text(self, button):
+        """Send text from entry field."""
+        text = self.text_entry.get_text()
+        if not text:
+            return
+        
+        gatt_app = self.gatt_app_getter()
+        if not gatt_app or not gatt_app.notifying:
+            return
+        
+        # Send each character with a small delay
+        for char in text:
+            char_lower = char.lower()
+            key_code = HID_KEY_CODES.get(char_lower) if char_lower != char else None
+            modifier = MOD_LSHIFT if char.isupper() or char in '!@#$%^&*()_+{}|:"<>?' else 0
+            
+            if not key_code:
+                key_code = HID_KEY_CODES.get(char)
+            
+            if key_code:
+                gatt_app.send_key(key_code, modifier)
+                GLib.usleep(50000)  # 50ms delay between keys
+        
+        self.text_entry.set_text("")
+
+
+class VirtualTrackpad(Gtk.Box):
+    """Virtual trackpad widget that sends HID mouse reports."""
+    
+    def __init__(self, gatt_app_getter):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.set_margin_top(6)
+        self.set_margin_bottom(6)
+        self.set_margin_start(6)
+        self.set_margin_end(6)
+        
+        self.gatt_app_getter = gatt_app_getter
+        
+        # Info label
+        info = Gtk.Label(label="Drag on the trackpad area to move the cursor")
+        self.append(info)
+        
+        # Trackpad area
+        self.trackpad = Gtk.DrawingArea()
+        self.trackpad.set_size_request(600, 400)
+        self.trackpad.set_draw_func(self._draw_trackpad)
+        
+        # Add event controllers
+        drag_controller = Gtk.GestureDrag()
+        drag_controller.connect("drag-update", self._on_drag_update)
+        drag_controller.connect("drag-end", self._on_drag_end)
+        self.trackpad.add_controller(drag_controller)
+        
+        # Track last position for delta calculation
+        self._last_x = 0
+        self._last_y = 0
+        self._is_dragging = False
+        
+        frame = Gtk.Frame()
+        frame.set_child(self.trackpad)
+        self.append(frame)
+        
+        # Mouse buttons
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        button_box.set_halign(Gtk.Align.CENTER)
+        
+        left_btn = Gtk.Button(label="Left Click")
+        left_btn.connect("clicked", lambda b: self._send_click(0x01))
+        button_box.append(left_btn)
+        
+        right_btn = Gtk.Button(label="Right Click")
+        right_btn.connect("clicked", lambda b: self._send_click(0x02))
+        button_box.append(right_btn)
+        
+        middle_btn = Gtk.Button(label="Middle Click")
+        middle_btn.connect("clicked", lambda b: self._send_click(0x04))
+        button_box.append(middle_btn)
+        
+        self.append(button_box)
+        
+        # Sensitivity slider
+        sens_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        sens_label = Gtk.Label(label="Sensitivity:")
+        sens_box.append(sens_label)
+        
+        self.sensitivity = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.1, 5.0, 0.1)
+        self.sensitivity.set_value(1.0)
+        self.sensitivity.set_hexpand(True)
+        sens_box.append(self.sensitivity)
+        
+        self.append(sens_box)
+    
+    def _draw_trackpad(self, area, cr, width, height, user_data):
+        """Draw the trackpad area."""
+        # Background
+        cr.set_source_rgb(0.2, 0.2, 0.25)
+        cr.paint()
+        
+        # Border
+        cr.set_source_rgb(0.4, 0.4, 0.5)
+        cr.set_line_width(2)
+        cr.rectangle(5, 5, width - 10, height - 10)
+        cr.stroke()
+        
+        # Instructions
+        cr.set_source_rgb(0.6, 0.6, 0.7)
+        cr.select_font_face("Sans", 0, 0)
+        cr.set_font_size(14)
+        text = "Drag here to move mouse"
+        extents = cr.text_extents(text)
+        cr.move_to(width/2 - extents.width/2, height/2)
+        cr.show_text(text)
+    
+    def _on_drag_update(self, gesture, offset_x, offset_y):
+        """Handle drag motion."""
+        if not self._is_dragging:
+            self._is_dragging = True
+            start_point = gesture.get_start_point()
+            self._last_x = start_point.x
+            self._last_y = start_point.y
+            return
+        
+        # Get current position
+        start_point = gesture.get_start_point()
+        current_x = start_point.x + offset_x
+        current_y = start_point.y + offset_y
+        
+        # Calculate delta
+        dx = int((current_x - self._last_x) * self.sensitivity.get_value())
+        dy = int((current_y - self._last_y) * self.sensitivity.get_value())
+        
+        # Update last position
+        self._last_x = current_x
+        self._last_y = current_y
+        
+        # Send mouse movement
+        if dx != 0 or dy != 0:
+            gatt_app = self.gatt_app_getter()
+            if gatt_app and gatt_app.notifying:
+                gatt_app.send_mouse_movement(dx, dy, 0, 0)
+    
+    def _on_drag_end(self, gesture, offset_x, offset_y):
+        """Handle drag end."""
+        self._is_dragging = False
+    
+    def _send_click(self, button_mask):
+        """Send a mouse button click."""
+        gatt_app = self.gatt_app_getter()
+        if not gatt_app or not gatt_app.notifying:
+            return
+        
+        # Press
+        gatt_app.send_mouse_movement(0, 0, button_mask, 0)
+        # Release after delay
+        GLib.timeout_add(50, lambda: gatt_app.send_mouse_movement(0, 0, 0, 0) if gatt_app.notifying else None)
+
+
 class HoGPeripheralGUI(Gtk.ApplicationWindow):
     """Main GUI window."""
     
@@ -234,36 +515,60 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         self.connection_label = Gtk.Label(label="Not connected")
         status_box.append(self.connection_label)
         
+        self.device_info_label = Gtk.Label(label="")
+        self.device_info_label.set_wrap(True)
+        status_box.append(self.device_info_label)
+        
         main_box.append(status_box)
         
-        # Controller visualizer
+        # Tabbed interface
+        notebook = Gtk.Notebook()
+        notebook.set_vexpand(True)
+        
+        # Controller tab
         self.visualizer = ControllerVisualizer()
+        controller_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        controller_box.set_margin_top(6)
+        controller_box.set_margin_bottom(6)
+        controller_box.set_margin_start(6)
+        controller_box.set_margin_end(6)
+        
         frame = Gtk.Frame()
         frame.set_child(self.visualizer)
-        main_box.append(frame)
+        controller_box.append(frame)
+        
+        info_label = Gtk.Label(
+            label="Physical controller inputs are forwarded when active"
+        )
+        info_label.set_wrap(True)
+        controller_box.append(info_label)
+        
+        notebook.append_page(controller_box, Gtk.Label(label="Controller"))
+        
+        # Keyboard tab
+        self.keyboard = VirtualKeyboard(lambda: self._gatt_app)
+        notebook.append_page(self.keyboard, Gtk.Label(label="Keyboard"))
+        
+        # Trackpad tab
+        self.trackpad = VirtualTrackpad(lambda: self._gatt_app)
+        notebook.append_page(self.trackpad, Gtk.Label(label="Trackpad"))
+        
+        main_box.append(notebook)
         
         # Control buttons
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         button_box.set_halign(Gtk.Align.CENTER)
         
-        self.start_button = Gtk.Button(label="Start Controller")
+        self.start_button = Gtk.Button(label="Start Service")
         self.start_button.connect("clicked", self._on_start_clicked)
         button_box.append(self.start_button)
         
-        self.stop_button = Gtk.Button(label="Stop Controller")
+        self.stop_button = Gtk.Button(label="Stop Service")
         self.stop_button.set_sensitive(False)
         self.stop_button.connect("clicked", self._on_stop_clicked)
         button_box.append(self.stop_button)
         
         main_box.append(button_box)
-        
-        # Info label
-        info_label = Gtk.Label(
-            label="Physical controller inputs will be forwarded when active.\n"
-                  "Connect from another device via Bluetooth settings."
-        )
-        info_label.set_wrap(True)
-        main_box.append(info_label)
         
         self.set_child(main_box)
     
@@ -407,11 +712,25 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
             self._gatt_app._hat,
         )
         
-        # Update connection status if notifying
+        # Update connection status
         if self._gatt_app.notifying:
-            self.connection_label.set_label("✓ Connected and sending data")
+            # Query connected device info
+            if self._bus and self._adapter_path:
+                device_info = get_primary_connected_device(self._bus, self._adapter_path)
+                if device_info:
+                    self.connection_label.set_label("✓ Connected and sending data")
+                    self.device_info_label.set_markup(
+                        f"<b>Device:</b> {device_info['name']}\n"
+                        f"<b>Address:</b> {device_info['address']}"
+                    )
+                else:
+                    self.connection_label.set_label("✓ Sending data")
+                    self.device_info_label.set_label("")
+            else:
+                self.connection_label.set_label("✓ Sending data")
         elif self._registered:
             self.connection_label.set_label("Waiting for connection...")
+            self.device_info_label.set_label("")
         
         return True
     
@@ -446,6 +765,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         
         self.status_label.set_markup("<big><b>Status: Stopped</b></big>")
         self.connection_label.set_label("Not connected")
+        self.device_info_label.set_label("")
         self.start_button.set_sensitive(True)
         self.stop_button.set_sensitive(False)
     

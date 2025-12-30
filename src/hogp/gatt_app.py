@@ -41,13 +41,14 @@ GATT_DESC_IFACE = "org.bluez.GattDescriptor1"
 DBUS_OM_IFACE = "org.freedesktop.DBus.ObjectManager"
 DBUS_PROPS_IFACE = "org.freedesktop.DBus.Properties"
 
-# Xbox 360-compatible HID Report Map
-# Report structure: 11 buttons + 8 axes (matching Xbox 360 pad layout from evtest)
-# Axes: ABS_X, ABS_Y, ABS_Z (LT), ABS_RX, ABS_RY, ABS_RZ (RT), ABS_HAT0X, ABS_HAT0Y
+# Multi-function HID Report Map
+# Includes: Gamepad (Report ID 1), Keyboard (Report ID 2), Mouse (Report ID 3)
 REPORT_MAP = bytes([
+    # === GAMEPAD (Report ID 1) ===
     0x05, 0x01,        # Usage Page (Generic Desktop)
     0x09, 0x05,        # Usage (Gamepad)
     0xA1, 0x01,        # Collection (Application)
+    0x85, 0x01,        #   Report ID (1)
     
     # 11 buttons: BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, 
     #             BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR
@@ -98,6 +99,83 @@ REPORT_MAP = bytes([
     0x81, 0x02,        #   Input (Data, Variable, Absolute)
     
     0xC0,              # End Collection
+    
+    # === KEYBOARD (Report ID 2) ===
+    0x05, 0x01,        # Usage Page (Generic Desktop)
+    0x09, 0x06,        # Usage (Keyboard)
+    0xA1, 0x01,        # Collection (Application)
+    0x85, 0x02,        #   Report ID (2)
+    
+    # Modifier byte
+    0x05, 0x07,        #   Usage Page (Key Codes)
+    0x19, 0xE0,        #   Usage Minimum (Left Control)
+    0x29, 0xE7,        #   Usage Maximum (Right GUI)
+    0x15, 0x00,        #   Logical Minimum (0)
+    0x25, 0x01,        #   Logical Maximum (1)
+    0x75, 0x01,        #   Report Size (1)
+    0x95, 0x08,        #   Report Count (8)
+    0x81, 0x02,        #   Input (Data, Variable, Absolute)
+    
+    # Reserved byte
+    0x95, 0x01,        #   Report Count (1)
+    0x75, 0x08,        #   Report Size (8)
+    0x81, 0x01,        #   Input (Constant)
+    
+    # 6 key codes
+    0x95, 0x06,        #   Report Count (6)
+    0x75, 0x08,        #   Report Size (8)
+    0x15, 0x00,        #   Logical Minimum (0)
+    0x26, 0xFF, 0x00,  #   Logical Maximum (255)
+    0x05, 0x07,        #   Usage Page (Key Codes)
+    0x19, 0x00,        #   Usage Minimum (0)
+    0x2A, 0xFF, 0x00,  #   Usage Maximum (255)
+    0x81, 0x00,        #   Input (Data, Array)
+    
+    0xC0,              # End Collection
+    
+    # === MOUSE (Report ID 3) ===
+    0x05, 0x01,        # Usage Page (Generic Desktop)
+    0x09, 0x02,        # Usage (Mouse)
+    0xA1, 0x01,        # Collection (Application)
+    0x85, 0x03,        #   Report ID (3)
+    0x09, 0x01,        #   Usage (Pointer)
+    0xA1, 0x00,        #   Collection (Physical)
+    
+    # Buttons (3 buttons: left, right, middle)
+    0x05, 0x09,        #     Usage Page (Button)
+    0x19, 0x01,        #     Usage Minimum (Button 1)
+    0x29, 0x03,        #     Usage Maximum (Button 3)
+    0x15, 0x00,        #     Logical Minimum (0)
+    0x25, 0x01,        #     Logical Maximum (1)
+    0x95, 0x03,        #     Report Count (3)
+    0x75, 0x01,        #     Report Size (1)
+    0x81, 0x02,        #     Input (Data, Variable, Absolute)
+    
+    # 5 bits padding
+    0x95, 0x01,        #     Report Count (1)
+    0x75, 0x05,        #     Report Size (5)
+    0x81, 0x01,        #     Input (Constant)
+    
+    # X, Y relative movement
+    0x05, 0x01,        #     Usage Page (Generic Desktop)
+    0x09, 0x30,        #     Usage (X)
+    0x09, 0x31,        #     Usage (Y)
+    0x16, 0x00, 0x80,  #     Logical Minimum (-32768)
+    0x26, 0xFF, 0x7F,  #     Logical Maximum (32767)
+    0x75, 0x10,        #     Report Size (16)
+    0x95, 0x02,        #     Report Count (2)
+    0x81, 0x06,        #     Input (Data, Variable, Relative)
+    
+    # Wheel
+    0x09, 0x38,        #     Usage (Wheel)
+    0x15, 0x81,        #     Logical Minimum (-127)
+    0x25, 0x7F,        #     Logical Maximum (127)
+    0x75, 0x08,        #     Report Size (8)
+    0x95, 0x01,        #     Report Count (1)
+    0x81, 0x06,        #     Input (Data, Variable, Relative)
+    
+    0xC0,              #   End Collection
+    0xC0,              # End Collection
 ])
 
 # HID Information: bcdHID=1.11, bCountryCode=0, Flags=0x02 (normally connectable)
@@ -141,16 +219,38 @@ class GattApplication:
         self._notify_timeout_id: Optional[int] = None
         self._report_rate_hz = 10
         
-        # Current report state matching new HID descriptor:
+        # Current GAMEPAD report state (Report ID 1):
+        # 1 byte: Report ID (0x01)
         # 2 bytes: 11 buttons + 5 bits padding
         # 8 bytes: 4 axes (X, Y, RX, RY) as int16
         # 2 bytes: 2 triggers (Z, RZ) as uint8
         # 1 byte: HAT switch (D-pad)
-        # Total: 13 bytes
+        # Total: 14 bytes
         self._buttons = 0  # 11-bit button mask
         self._axes = [0, 0, 0, 0]  # X, Y, RX, RY as int16 (-32768 to 32767)
         self._triggers = [0, 0]  # Z (LT), RZ (RT) as uint8 (0 to 255)
         self._hat = 0x0F  # HAT switch (0-7 = directions, 0x0F = centered)
+        
+        # Current KEYBOARD report state (Report ID 2):
+        # 1 byte: Report ID (0x02)
+        # 1 byte: Modifier keys (Ctrl, Shift, Alt, GUI)
+        # 1 byte: Reserved
+        # 6 bytes: Key codes
+        # Total: 9 bytes
+        self._kbd_modifiers = 0  # Modifier bitmask
+        self._kbd_keys = [0, 0, 0, 0, 0, 0]  # Up to 6 simultaneous keys
+        
+        # Current MOUSE report state (Report ID 3):
+        # 1 byte: Report ID (0x03)
+        # 1 byte: Button mask + padding
+        # 2 bytes: X movement (int16)
+        # 2 bytes: Y movement (int16)
+        # 1 byte: Wheel (int8)
+        # Total: 7 bytes
+        self._mouse_buttons = 0  # 3-bit button mask (left, right, middle)
+        self._mouse_x = 0  # Relative X movement
+        self._mouse_y = 0  # Relative Y movement
+        self._mouse_wheel = 0  # Wheel movement
         
         # Callbacks for external control
         self._on_notify_start: Optional[Callable[[], None]] = None
@@ -184,8 +284,57 @@ class GattApplication:
         self._hat = direction if direction <= 7 else 0x0F
 
     def get_current_report(self) -> bytes:
-        """Build the current 13-byte HID report."""
-        return struct.pack("<H4h2BB", self._buttons, *self._axes, *self._triggers, self._hat)
+        """Build the current 14-byte gamepad HID report (Report ID 1)."""
+        return struct.pack("<BH4h2BB", 0x01, self._buttons, *self._axes, *self._triggers, self._hat)
+    
+    # === KEYBOARD METHODS ===
+    
+    def send_key(self, key_code: int, modifiers: int = 0) -> None:
+        """
+        Send a single key press.
+        
+        Args:
+            key_code: HID key code (e.g., 0x04 = 'a')
+            modifiers: Modifier bitmask (0x01=LCtrl, 0x02=LShift, 0x04=LAlt, 0x08=LGUI)
+        """
+        self._kbd_modifiers = modifiers
+        self._kbd_keys = [key_code, 0, 0, 0, 0, 0]
+        self._send_keyboard_notification()
+        # Release key after a short delay
+        GLib.timeout_add(50, self._release_key)
+    
+    def _release_key(self) -> bool:
+        """Release all keys."""
+        self._kbd_modifiers = 0
+        self._kbd_keys = [0, 0, 0, 0, 0, 0]
+        self._send_keyboard_notification()
+        return False  # Don't repeat
+    
+    def get_keyboard_report(self) -> bytes:
+        """Build the current 9-byte keyboard HID report (Report ID 2)."""
+        return struct.pack("<BBB6B", 0x02, self._kbd_modifiers, 0, *self._kbd_keys)
+    
+    # === MOUSE METHODS ===
+    
+    def send_mouse_movement(self, dx: int, dy: int, buttons: int = 0, wheel: int = 0) -> None:
+        """
+        Send mouse movement.
+        
+        Args:
+            dx: Relative X movement (-32768 to 32767)
+            dy: Relative Y movement (-32768 to 32767)
+            buttons: Button bitmask (0x01=left, 0x02=right, 0x04=middle)
+            wheel: Wheel movement (-127 to 127)
+        """
+        self._mouse_buttons = buttons & 0x07
+        self._mouse_x = max(-32768, min(32767, dx))
+        self._mouse_y = max(-32768, min(32767, dy))
+        self._mouse_wheel = max(-127, min(127, wheel))
+        self._send_mouse_notification()
+    
+    def get_mouse_report(self) -> bytes:
+        """Build the current 7-byte mouse HID report (Report ID 3)."""
+        return struct.pack("<BBhhb", 0x03, self._mouse_buttons, self._mouse_x, self._mouse_y, self._mouse_wheel)
 
     def register(self) -> bool:
         """Register all GATT objects on D-Bus."""
@@ -974,7 +1123,7 @@ class GattApplication:
             self._on_notify_stop()
 
     def _send_notification(self) -> bool:
-        """Send a notification with the current report value."""
+        """Send a notification with the current gamepad report value."""
         if not self._notifying:
             return False
         
@@ -997,9 +1146,65 @@ class GattApplication:
                 ),
             )
         except Exception as e:
-            logger.error(f"Error sending notification: {e}")
+            logger.error(f"Error sending gamepad notification: {e}")
         
         return True  # Continue the timeout
+    
+    def _send_keyboard_notification(self) -> None:
+        """Send a keyboard report notification immediately."""
+        if not self._notifying:
+            return
+        
+        report = self.get_keyboard_report()
+        char_path = f"{self.APP_PATH}/service0/char3"
+        
+        try:
+            self.bus.emit_signal(
+                None,
+                char_path,
+                DBUS_PROPS_IFACE,
+                "PropertiesChanged",
+                GLib.Variant(
+                    "(sa{sv}as)",
+                    (
+                        GATT_CHAR_IFACE,
+                        {"Value": GLib.Variant("ay", report)},
+                        [],
+                    ),
+                ),
+            )
+        except Exception as e:
+            logger.error(f"Error sending keyboard notification: {e}")
+    
+    def _send_mouse_notification(self) -> None:
+        """Send a mouse report notification immediately."""
+        if not self._notifying:
+            return
+        
+        report = self.get_mouse_report()
+        char_path = f"{self.APP_PATH}/service0/char3"
+        
+        try:
+            self.bus.emit_signal(
+                None,
+                char_path,
+                DBUS_PROPS_IFACE,
+                "PropertiesChanged",
+                GLib.Variant(
+                    "(sa{sv}as)",
+                    (
+                        GATT_CHAR_IFACE,
+                        {"Value": GLib.Variant("ay", report)},
+                        [],
+                    ),
+                ),
+            )
+            # Reset mouse delta after sending
+            self._mouse_x = 0
+            self._mouse_y = 0
+            self._mouse_wheel = 0
+        except Exception as e:
+            logger.error(f"Error sending mouse notification: {e}")
 
     @property
     def notifying(self) -> bool:

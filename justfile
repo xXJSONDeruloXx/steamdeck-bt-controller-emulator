@@ -21,8 +21,17 @@ deploy:
     @echo "📦 Deploying to {{deck_user}}@{{deck_host}}:{{deck_path}}"
     ssh {{deck_user}}@{{deck_host}} "mkdir -p {{deck_path}}/src"
     scp -r {{src_dir}}/hogp {{deck_user}}@{{deck_host}}:{{deck_path}}/src/
-    scp README.md {{deck_user}}@{{deck_host}}:{{deck_path}}/
+    scp README.md FEATURES.md HID_KEYCODES.py {{deck_user}}@{{deck_host}}:{{deck_path}}/
+    scp run-gui.sh install-deck.sh launcher-wrapper.sh bt-controller-emulator.desktop {{deck_user}}@{{deck_host}}:{{deck_path}}/
     @echo "✅ Deployment complete"
+
+# Deploy only modified files (quick sync)
+deploy-quick:
+    @echo "⚡ Quick deploying modified files..."
+    scp {{src_dir}}/hogp/gatt_app.py {{deck_user}}@{{deck_host}}:{{deck_path}}/src/hogp/
+    scp {{src_dir}}/hogp/bluez.py {{deck_user}}@{{deck_host}}:{{deck_path}}/src/hogp/
+    scp {{src_dir}}/hogp/gui.py {{deck_user}}@{{deck_host}}:{{deck_path}}/src/hogp/
+    @echo "✅ Quick deployment complete"
 
 # Deploy and run immediately
 deploy-run: deploy run
@@ -55,6 +64,23 @@ run-input-background name="SteamDeckHoG" rate="10" device="auto":
     @echo "🎮 Starting HoG peripheral with input forwarding in background..."
     ssh {{deck_user}}@{{deck_host}} "cd {{deck_path}} && sudo nohup python3 -m src.hogp --name '{{name}}' --rate {{rate}} --input-device {{device}} > /tmp/hogp.log 2>&1 &"
     @echo "✅ Started. Use 'just logs' to view output or 'just stop' to stop."
+
+# Run the GUI on Steam Deck (interactive)
+run-gui:
+    @echo "🖥️  Starting GUI on Steam Deck..."
+    ssh -t {{deck_user}}@{{deck_host}} "cd {{deck_path}} && sudo python3 -m hogp.gui"
+
+# Deploy and run GUI
+deploy-gui: deploy-quick run-gui
+
+# Install desktop launcher on Steam Deck
+install:
+    @echo "📦 Installing desktop launcher on Steam Deck..."
+    ssh -t {{deck_user}}@{{deck_host}} "cd {{deck_path}} && sudo ./install-deck.sh"
+    @echo "✅ Desktop launcher installed. Search for 'BT Controller Emulator' in app menu."
+
+# Reinstall after deployment
+deploy-install: deploy install
 
 # Stop the HoG peripheral on Steam Deck
 stop:

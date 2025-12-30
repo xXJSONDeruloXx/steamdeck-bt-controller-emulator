@@ -7,7 +7,7 @@ deadlocks with GDBus on older glib versions.
 
 import logging
 import subprocess
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, List, Dict
 
 from gi.repository import Gio, GLib
 
@@ -364,3 +364,76 @@ def set_static_ble_address(
         logger.warning(f"Could not set static BLE address: {e}")
         return False
 
+
+def get_connected_devices(bus: Gio.DBusConnection, adapter_path: str) -> List[Dict]:
+    """
+    Get list of devices currently connected to the adapter.
+    
+    Returns:
+        List of dicts with 'path', 'name', 'address', 'connected' keys
+    """
+    devices = []
+    try:
+        result = bus.call_sync(
+            BLUEZ_SERVICE,
+            "/",
+            DBUS_OM_IFACE,
+            "GetManagedObjects",
+            None,
+            GLib.VariantType("(a{oa{sa{sv}}})"),
+            Gio.DBusCallFlags.NONE,
+            5000,
+            None,
+        )
+        objects = result.get_child_value(0)
+        for i in range(objects.n_children()):
+            entry = objects.get_child_value(i)
+            path = entry.get_child_value(0).get_string()
+            
+            # Only consider devices under our adapter
+            if not path.startswith(adapter_path):
+                continue
+            
+            ifaces = entry.get_child_value(1)
+            device_props = None
+            
+            for j in range(ifaces.n_children()):
+                iface_entry = ifaces.get_child_value(j)
+                iface_name = iface_entry.get_child_value(0).get_string()
+                
+                if iface_name == "org.bluez.Device1":
+                    device_props = iface_entry.get_child_value(1)
+                    break
+            
+            if device_props:
+                props_dict = {}
+                for k in range(device_props.n_children()):
+                    prop_entry = device_props.get_child_value(k)
+                    prop_name = prop_entry.get_child_value(0).get_string()
+                    prop_value = prop_entry.get_child_value(1).get_variant()
+                    props_dict[prop_name] = prop_value
+                
+                connected = props_dict.get("Connected", GLib.Variant("b", False)).get_boolean()
+                
+                if connected:
+                    devices.append({
+                        "path": path,
+                        "name": props_dict.get("Name", GLib.Variant("s", "Unknown")).get_string(),
+                        "address": props_dict.get("Address", GLib.Variant("s", "")).get_string(),
+                        "connected": connected,
+                    })
+    except GLib.Error as e:
+        logger.error(f"Error getting connected devices: {e}")
+    
+    return devices
+
+
+def get_primary_connected_device(bus: Gio.DBusConnection, adapter_path: str) -> Optional[Dict]:
+    """
+    Get the primary (first) connected device info.
+    
+    Returns:
+        Dict with 'name', 'address' keys or None if no device connected
+    """
+    devices = get_connected_devices(bus, adapter_path)
+    return devices[0] if devices else None
