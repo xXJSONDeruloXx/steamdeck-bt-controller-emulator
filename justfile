@@ -76,7 +76,7 @@ deploy-gui: deploy-quick run-gui
 # Install desktop launcher on Steam Deck
 install:
     @echo "📦 Installing desktop launcher on Steam Deck..."
-    ssh -t {{deck_user}}@{{deck_host}} "cd {{deck_path}} && ./install-deck.sh"
+    ssh -t {{deck_user}}@{{deck_host}} "cd {{deck_path}} && ./scripts/install-deck.sh"
     @echo "✅ Desktop launcher installed. Search for 'BT Controller Emulator' in app menu."
 
 # Reinstall after deployment
