@@ -30,6 +30,7 @@ from hogp.bluez import (
     set_static_ble_address,
     get_adapter_index,
     get_primary_connected_device,
+    set_adapter_alias,
 )
 from hogp.gatt_app import GattApplication
 from hogp.adv import Advertisement
@@ -743,6 +744,9 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
             if not self._adapter_path:
                 GLib.idle_add(self._show_error, "Bluetooth adapter not found")
                 return
+            
+            # Set adapter alias to match our device name
+            set_adapter_alias(self._bus, self._adapter_path, "SteamDeckPad")
             
             # Set static address
             adapter_idx = get_adapter_index("hci0")

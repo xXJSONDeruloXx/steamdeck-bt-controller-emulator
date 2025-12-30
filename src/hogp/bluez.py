@@ -101,6 +101,11 @@ def set_adapter_property(bus: Gio.DBusConnection, adapter_path: str, prop_name: 
         return False
 
 
+def set_adapter_alias(bus: Gio.DBusConnection, adapter_path: str, alias: str) -> bool:
+    """Set the adapter's Alias (visible Bluetooth name)."""
+    return set_adapter_property(bus, adapter_path, "Alias", GLib.Variant("s", alias))
+
+
 def get_le_advertising_active_instances(bus: Gio.DBusConnection, adapter_path: str) -> int:
     """Get the number of active advertising instances."""
     try:

@@ -25,6 +25,7 @@ from .bluez import (
     get_le_advertising_active_instances,
     set_static_ble_address,
     get_adapter_index,
+    set_adapter_alias,
 )
 from .gatt_app import GattApplication
 from .adv import Advertisement
@@ -97,6 +98,12 @@ class HoGPeripheral:
             logger.error(f"Adapter {self.adapter} not found")
             return 1
         logger.info(f"Using adapter: {self._adapter_path}")
+        
+        # Set adapter alias to match our device name
+        if set_adapter_alias(self._bus, self._adapter_path, self.name):
+            logger.info(f"Adapter alias set to: {self.name}")
+        else:
+            logger.warning("Could not set adapter alias - device name may not persist after pairing")
         
         # Set static BLE address to prevent duplicate controller entries
         if self.static_addr:
