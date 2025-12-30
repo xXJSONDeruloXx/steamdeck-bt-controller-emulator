@@ -1,16 +1,23 @@
-This project implements a **HID-over-GATT (HoG) profile** peripheral using BlueZ's D-Bus APIs. When running on a Steam Deck (SteamOS), it:
+HID-over-GATT profile implementation using BlueZ D-Bus APIs. Emulates a Bluetooth LE gamepad peripheral that forwards controller input from a Steam Deck to other devices.
 
-1. Advertises as a BLE peripheral named "SteamDeckHoG" (configurable)
-2. Exposes a GATT HID Service (UUID 0x1812) with standard characteristics
-3. Sends HID input reports via BLE notifications
-4. Forwards physical controller inputs to the Bluetooth HoG device
-5. Provides a simple CLI for testing button presses and axis movements
+## Installation
 
-## Research References
+```bash
+curl -fsSL https://raw.githubusercontent.com/xXJSONDeruloXx/steamdeck-bt-controller-emulator/main/install.sh | bash
+```
 
-These projects were referenced during development:
+Installs to `~/steamdeck-bt-controller-emulator`. Creates desktop launcher. Configures Bluetooth and input permissions. Log out and back in after first install.
 
-- [EmuBTHID](https://github.com/Alkaid-Benetnash/EmuBTHID) - Bluetooth HID emulation
-- [BTGamepad](https://github.com/007durgesh219/BTGamepad) - Android Bluetooth gamepad
-- [diyps3controller](https://github.com/rafikel/diyps3controller) - PS3 controller emulation
-- [GIMX](https://github.com/matlo/GIMX) - Game Input Multiplexer
+Update by running the same command. Uninstall with `cd ~/steamdeck-bt-controller-emulator && ./uninstall.sh`.
+
+## Usage
+
+Launch from application menu or run `python3 -m src.hogp` directly. GUI provides connection management and input monitoring. CLI mode available for testing without `--gui` flag. Use `--forward /dev/input/eventX` to map physical controller.
+
+## Development
+
+Project uses justfile for deployment. `just deploy` syncs to Steam Deck over SSH. `just run` executes remotely. `just logs` tails system logs. Source in src/hogp includes bluez.py (D-Bus interface), gatt_app.py (HID service), input_handler.py (evdev forwarding), and gui.py (GTK4 interface).
+
+## References
+
+EmuBTHID, BTGamepad, diyps3controller, GIMX 
