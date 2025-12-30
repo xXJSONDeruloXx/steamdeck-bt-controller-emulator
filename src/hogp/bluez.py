@@ -39,7 +39,7 @@ def find_adapter_path(bus: Gio.DBusConnection, adapter_name: str = "hci0") -> Op
             DBUS_OM_IFACE,
             "GetManagedObjects",
             None,
-            GLib.VariantType("(a{oa{sa{sv}}}"),
+            GLib.VariantType("(a{oa{sa{sv}}})"),
             Gio.DBusCallFlags.NONE,
             5000,
             None,
