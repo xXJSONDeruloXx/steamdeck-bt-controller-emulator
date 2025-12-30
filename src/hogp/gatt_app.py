@@ -41,33 +41,60 @@ GATT_DESC_IFACE = "org.bluez.GattDescriptor1"
 DBUS_OM_IFACE = "org.freedesktop.DBus.ObjectManager"
 DBUS_PROPS_IFACE = "org.freedesktop.DBus.Properties"
 
-# Simple HID Report Map: 16 buttons + 4 axes (X, Y, Z, Rz) as int16
-# This is a minimal gamepad descriptor
+# Xbox 360-compatible HID Report Map
+# Report structure: 11 buttons + 8 axes (matching Xbox 360 pad layout from evtest)
+# Axes: ABS_X, ABS_Y, ABS_Z (LT), ABS_RX, ABS_RY, ABS_RZ (RT), ABS_HAT0X, ABS_HAT0Y
 REPORT_MAP = bytes([
     0x05, 0x01,        # Usage Page (Generic Desktop)
     0x09, 0x05,        # Usage (Gamepad)
     0xA1, 0x01,        # Collection (Application)
     
-    # 16 buttons
+    # 11 buttons: BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, 
+    #             BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR
     0x05, 0x09,        #   Usage Page (Button)
     0x19, 0x01,        #   Usage Minimum (Button 1)
-    0x29, 0x10,        #   Usage Maximum (Button 16)
+    0x29, 0x0B,        #   Usage Maximum (Button 11)
     0x15, 0x00,        #   Logical Minimum (0)
     0x25, 0x01,        #   Logical Maximum (1)
     0x75, 0x01,        #   Report Size (1)
-    0x95, 0x10,        #   Report Count (16)
+    0x95, 0x0B,        #   Report Count (11)
     0x81, 0x02,        #   Input (Data, Variable, Absolute)
     
-    # 4 axes: X, Y, Z, Rz - each int16
+    # 5 bits padding to byte-align
+    0x75, 0x01,        #   Report Size (1)
+    0x95, 0x05,        #   Report Count (5)
+    0x81, 0x01,        #   Input (Constant) - padding
+    
+    # 4 main axes: X, Y, RX, RY (left stick X/Y, right stick X/Y)
     0x05, 0x01,        #   Usage Page (Generic Desktop)
     0x09, 0x30,        #   Usage (X)
     0x09, 0x31,        #   Usage (Y)
-    0x09, 0x32,        #   Usage (Z)
-    0x09, 0x35,        #   Usage (Rz)
+    0x09, 0x33,        #   Usage (Rx)
+    0x09, 0x34,        #   Usage (Ry)
     0x16, 0x00, 0x80,  #   Logical Minimum (-32768)
     0x26, 0xFF, 0x7F,  #   Logical Maximum (32767)
     0x75, 0x10,        #   Report Size (16)
     0x95, 0x04,        #   Report Count (4)
+    0x81, 0x02,        #   Input (Data, Variable, Absolute)
+    
+    # 2 trigger axes: Z, Rz (LT, RT) - unsigned 0-255
+    0x09, 0x32,        #   Usage (Z) - Left Trigger
+    0x09, 0x35,        #   Usage (Rz) - Right Trigger
+    0x15, 0x00,        #   Logical Minimum (0)
+    0x26, 0xFF, 0x00,  #   Logical Maximum (255)
+    0x75, 0x08,        #   Report Size (8)
+    0x95, 0x02,        #   Report Count (2)
+    0x81, 0x02,        #   Input (Data, Variable, Absolute)
+    
+    # D-pad as HAT switch
+    0x09, 0x39,        #   Usage (Hat Switch)
+    0x15, 0x00,        #   Logical Minimum (0)
+    0x25, 0x07,        #   Logical Maximum (7)
+    0x35, 0x00,        #   Physical Minimum (0)
+    0x46, 0x3B, 0x01,  #   Physical Maximum (315)
+    0x65, 0x14,        #   Unit (Degrees)
+    0x75, 0x08,        #   Report Size (8)
+    0x95, 0x01,        #   Report Count (1)
     0x81, 0x02,        #   Input (Data, Variable, Absolute)
     
     0xC0,              # End Collection
@@ -114,9 +141,16 @@ class GattApplication:
         self._notify_timeout_id: Optional[int] = None
         self._report_rate_hz = 10
         
-        # Current report state (2 bytes buttons + 8 bytes axes = 10 bytes)
-        self._buttons = 0  # 16-bit button mask
-        self._axes = [0, 0, 0, 0]  # X, Y, Z, Rz as int16
+        # Current report state matching new HID descriptor:
+        # 2 bytes: 11 buttons + 5 bits padding
+        # 8 bytes: 4 axes (X, Y, RX, RY) as int16
+        # 2 bytes: 2 triggers (Z, RZ) as uint8
+        # 1 byte: HAT switch (D-pad)
+        # Total: 13 bytes
+        self._buttons = 0  # 11-bit button mask
+        self._axes = [0, 0, 0, 0]  # X, Y, RX, RY as int16 (-32768 to 32767)
+        self._triggers = [0, 0]  # Z (LT), RZ (RT) as uint8 (0 to 255)
+        self._hat = 0x0F  # HAT switch (0-7 = directions, 0x0F = centered)
         
         # Callbacks for external control
         self._on_notify_start: Optional[Callable[[], None]] = None
@@ -128,21 +162,30 @@ class GattApplication:
         logger.info(f"Report rate set to {self._report_rate_hz} Hz")
 
     def set_button(self, button_index: int, pressed: bool) -> None:
-        """Set a button state (0-15)."""
-        if 0 <= button_index < 16:
+        """Set a button state (0-10)."""
+        if 0 <= button_index < 11:
             if pressed:
                 self._buttons |= (1 << button_index)
             else:
                 self._buttons &= ~(1 << button_index)
 
     def set_axis(self, axis_index: int, value: int) -> None:
-        """Set an axis value (0-3, value -32768 to 32767)."""
+        """Set an axis value (0-3: X, Y, RX, RY, value -32768 to 32767)."""
         if 0 <= axis_index < 4:
             self._axes[axis_index] = max(-32768, min(32767, value))
 
+    def set_trigger(self, trigger_index: int, value: int) -> None:
+        """Set a trigger value (0=LT, 1=RT, value 0 to 255)."""
+        if 0 <= trigger_index < 2:
+            self._triggers[trigger_index] = max(0, min(255, value))
+
+    def set_hat(self, direction: int) -> None:
+        """Set HAT/D-pad direction (0-7 or 0x0F for center)."""
+        self._hat = direction if direction <= 7 else 0x0F
+
     def get_current_report(self) -> bytes:
-        """Build the current 10-byte HID report."""
-        return struct.pack("<H4h", self._buttons, *self._axes)
+        """Build the current 13-byte HID report."""
+        return struct.pack("<H4h2BB", self._buttons, *self._axes, *self._triggers, self._hat)
 
     def register(self) -> bool:
         """Register all GATT objects on D-Bus."""

@@ -139,6 +139,8 @@ class HoGPeripheral:
                 device_path=self.input_device if self.input_device != "auto" else None,
                 on_button_change=self._on_physical_button,
                 on_axis_change=self._on_physical_axis,
+                on_trigger_change=self._on_physical_trigger,
+                on_hat_change=self._on_physical_hat,
                 verbose=self.verbose,
             )
             if self._input_handler.start():
@@ -252,8 +254,10 @@ class HoGPeripheral:
     def _print_cli_help(self) -> None:
         """Print CLI help."""
         print("\n--- CLI Commands ---")
-        print("  b <0-15>     : Toggle button (e.g., 'b 0')")
-        print("  a <0-3> <val>: Set axis value (e.g., 'a 0 16000')")
+        print("  b <0-10>     : Toggle button (e.g., 'b 0')")
+        print("  a <0-3> <val>: Set axis value -32768 to 32767 (e.g., 'a 0 16000')")
+        print("  tr <0-1> <val>: Set trigger 0-255 (e.g., 'tr 0 255')")
+        print("  h <dir>      : Set HAT/D-pad direction 0-7 or F (e.g., 'h 0')")
         print("  t            : Start/stop test pattern")
         print("  s            : Show current state")
         print("  q            : Quit")
@@ -276,11 +280,13 @@ class HoGPeripheral:
                 elif cmd == "b" and len(parts) >= 2:
                     try:
                         btn = int(parts[1])
-                        if 0 <= btn < 16:
+                        if 0 <= btn < 11:
                             # Toggle button
                             current = (self._gatt_app._buttons >> btn) & 1
                             self._gatt_app.set_button(btn, not current)
                             print(f"Button {btn} {'pressed' if not current else 'released'}")
+                        else:
+                            print("Button must be 0-10")
                     except ValueError:
                         print("Invalid button number")
                 elif cmd == "a" and len(parts) >= 3:
@@ -290,8 +296,35 @@ class HoGPeripheral:
                         if 0 <= axis < 4:
                             self._gatt_app.set_axis(axis, value)
                             print(f"Axis {axis} = {value}")
+                        else:
+                            print("Axis must be 0-3")
                     except ValueError:
                         print("Invalid axis/value")
+                elif cmd == "tr" and len(parts) >= 3:
+                    try:
+                        trig = int(parts[1])
+                        value = int(parts[2])
+                        if 0 <= trig < 2:
+                            self._gatt_app.set_trigger(trig, value)
+                            print(f"Trigger {trig} = {value}")
+                        else:
+                            print("Trigger must be 0-1")
+                    except ValueError:
+                        print("Invalid trigger/value")
+                elif cmd == "h" and len(parts) >= 2:
+                    try:
+                        dirstr = parts[1].upper()
+                        if dirstr == 'F':
+                            direction = 0x0F
+                        else:
+                            direction = int(dirstr)
+                        if 0 <= direction <= 7 or direction == 0x0F:
+                            self._gatt_app.set_hat(direction)
+                            print(f"HAT = {direction:02X}")
+                        else:
+                            print("HAT must be 0-7 or F")
+                    except ValueError:
+                        print("Invalid HAT direction")
                 elif cmd == "t":
                     GLib.idle_add(self._toggle_test_pattern)
                 elif cmd == "s":
@@ -328,14 +361,28 @@ class HoGPeripheral:
             if self.verbose:
                 logger.debug(f"Physical axis {axis_index} = {value}")
 
+    def _on_physical_trigger(self, trigger_index: int, value: int) -> None:
+        """Callback for physical trigger events."""
+        if self._gatt_app and not self._shutting_down:
+            self._gatt_app.set_trigger(trigger_index, value)
+            if self.verbose:
+                logger.debug(f"Physical trigger {trigger_index} = {value}")
+
+    def _on_physical_hat(self, direction: int) -> None:
+        """Callback for physical HAT/D-pad events."""
+        if self._gatt_app and not self._shutting_down:
+            self._gatt_app.set_hat(direction)
+            if self.verbose:
+                logger.debug(f"Physical HAT = {direction:02X}")
+
     def _test_pattern_tick(self) -> bool:
         """Update test pattern state."""
         if self._shutting_down:
             return False
         
-        # Cycle through buttons
+        # Cycle through buttons (0-10)
         self._gatt_app.set_button(self._test_button_idx, False)
-        self._test_button_idx = (self._test_button_idx + 1) % 16
+        self._test_button_idx = (self._test_button_idx + 1) % 11
         self._gatt_app.set_button(self._test_button_idx, True)
         
         # Sweep axis 0
@@ -352,10 +399,14 @@ class HoGPeripheral:
         """Print current controller state."""
         buttons = self._gatt_app._buttons
         axes = self._gatt_app._axes
+        triggers = self._gatt_app._triggers
+        hat = self._gatt_app._hat
         notifying = self._gatt_app.notifying
         
-        print(f"\nButtons: 0x{buttons:04X} (binary: {buttons:016b})")
-        print(f"Axes: X={axes[0]}, Y={axes[1]}, Z={axes[2]}, Rz={axes[3]}")
+        print(f"\nButtons: 0x{buttons:04X} (binary: {buttons:011b})")
+        print(f"Axes: X={axes[0]}, Y={axes[1]}, RX={axes[2]}, RY={axes[3]}")
+        print(f"Triggers: LT={triggers[0]}, RT={triggers[1]}")
+        print(f"HAT: {hat:02X}")
         print(f"Notifying: {notifying}")
         print(f"Report: {self._gatt_app.get_current_report().hex()}\n")
 

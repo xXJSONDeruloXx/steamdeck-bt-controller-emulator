@@ -19,21 +19,22 @@ class InputHandler:
     Handles input from a physical controller device and forwards to HoG report.
     """
     
-    # Xbox 360 controller button mapping to our 16-button report
-    # Our HID report: buttons 0-15 correspond to standard gamepad layout
-    # Xbox 360 uses BTN_A, BTN_B, BTN_X, BTN_Y instead of BTN_SOUTH, BTN_EAST, etc.
+    # Xbox 360 controller button mapping matching evtest output
+    # evtest shows: BTN_SOUTH(304), BTN_EAST(305), BTN_NORTH(307), BTN_WEST(308)
+    # BTN_TL(310), BTN_TR(311), BTN_SELECT(314), BTN_START(315), BTN_MODE(316)
+    # BTN_THUMBL(317), BTN_THUMBR(318)
     BUTTON_MAP = {
-        304: 0,   # BTN_A / BTN_SOUTH = A button
-        305: 1,   # BTN_B / BTN_EAST = B button
-        307: 2,   # BTN_X / BTN_WEST = X button
-        308: 3,   # BTN_Y / BTN_NORTH = Y button
-        310: 4,   # BTN_TL = Left bumper (LB)
-        311: 5,   # BTN_TR = Right bumper (RB)
-        314: 6,   # BTN_SELECT = Back/Select button
-        315: 7,   # BTN_START = Start button
-        316: 8,   # BTN_MODE = Guide/Home button
-        317: 9,   # BTN_THUMBL = Left stick click (LS)
-        318: 10,  # BTN_THUMBR = Right stick click (RS)
+        304: 0,   # BTN_SOUTH = A button (button 0)
+        305: 1,   # BTN_EAST = B button (button 1)
+        307: 2,   # BTN_NORTH = X button (button 2)
+        308: 3,   # BTN_WEST = Y button (button 3)
+        310: 4,   # BTN_TL = Left bumper (button 4)
+        311: 5,   # BTN_TR = Right bumper (button 5)
+        314: 6,   # BTN_SELECT = Back/Select button (button 6)
+        315: 7,   # BTN_START = Start button (button 7)
+        316: 8,   # BTN_MODE = Guide/Home button (button 8)
+        317: 9,   # BTN_THUMBL = Left stick click (button 9)
+        318: 10,  # BTN_THUMBR = Right stick click (button 10)
     }
     
     # D-pad mapping (treated as buttons 11-14 in our report)
@@ -42,18 +43,19 @@ class InputHandler:
         # We'll handle these specially as they're axes, not buttons
     }
     
-    # Axis mapping to our 4-axis report (X, Y, Z, Rz)
+    # Axis mapping matching evtest output
+    # evtest shows: ABS_X(0), ABS_Y(1), ABS_Z(2), ABS_RX(3), ABS_RY(4), ABS_RZ(5)
     AXIS_MAP = {
         0: 0,    # ABS_X = Left stick X -> axis 0 (X)
         1: 1,    # ABS_Y = Left stick Y -> axis 1 (Y)
-        3: 2,    # ABS_RX = Right stick X -> axis 2 (Z)
-        4: 3,    # ABS_RY = Right stick Y -> axis 3 (Rz)
+        3: 2,    # ABS_RX = Right stick X -> axis 2 (RX)
+        4: 3,    # ABS_RY = Right stick Y -> axis 3 (RY)
     }
     
-    # Trigger axes (will be mapped to buttons or axes depending on implementation)
+    # Trigger axes mapped to separate trigger values (0-255)
     TRIGGER_MAP = {
-        2: 'left_trigger',   # ABS_Z = LT
-        5: 'right_trigger',  # ABS_RZ = RT
+        2: 0,   # ABS_Z = LT -> trigger 0
+        5: 1,   # ABS_RZ = RT -> trigger 1
     }
 
     def __init__(
@@ -61,6 +63,8 @@ class InputHandler:
         device_path: Optional[str] = None,
         on_button_change: Optional[Callable[[int, bool], None]] = None,
         on_axis_change: Optional[Callable[[int, int], None]] = None,
+        on_trigger_change: Optional[Callable[[int, int], None]] = None,
+        on_hat_change: Optional[Callable[[int], None]] = None,
         verbose: bool = False,
     ):
         """
@@ -71,11 +75,15 @@ class InputHandler:
                         If None, will try to auto-detect Xbox 360 pad
             on_button_change: Callback for button changes (button_index, pressed)
             on_axis_change: Callback for axis changes (axis_index, value)
+            on_trigger_change: Callback for trigger changes (trigger_index, value 0-255)
+            on_hat_change: Callback for HAT/D-pad changes (direction 0-7 or 0x0F for center)
             verbose: Enable verbose logging
         """
         self.device_path = device_path
         self.on_button_change = on_button_change
         self.on_axis_change = on_axis_change
+        self.on_trigger_change = on_trigger_change
+        self.on_hat_change = on_hat_change
         self.verbose = verbose
         
         self._device: Optional[InputDevice] = None
@@ -232,7 +240,6 @@ class InputHandler:
             axis_index = self.AXIS_MAP[axis_code]
             
             # Convert from device range to our range (-32768 to 32767)
-            # Xbox 360 controller typically uses 0-255 or similar
             abs_info = self._device.absinfo(axis_code)
             
             # Normalize to -32768 to 32767 range
@@ -246,62 +253,62 @@ class InputHandler:
             if self.on_axis_change:
                 self.on_axis_change(axis_index, value)
         
-        # Handle D-pad (HAT axes -> buttons 11-14)
+        # Handle triggers (separate from axes)
+        elif axis_code in self.TRIGGER_MAP:
+            trigger_index = self.TRIGGER_MAP[axis_code]
+            
+            # Get the absolute info for proper scaling
+            abs_info = self._device.absinfo(axis_code)
+            
+            # Normalize to 0-255 range
+            range_size = abs_info.max - abs_info.min
+            normalized = ((raw_value - abs_info.min) / range_size) * 255
+            value = int(max(0, min(255, normalized)))
+            
+            if self.verbose:
+                logger.debug(f"Trigger {trigger_index} = {value}")
+            
+            if self.on_trigger_change:
+                self.on_trigger_change(trigger_index, value)
+        
+        # Handle D-pad (HAT axes -> HAT switch direction)
         elif axis_code == 16:  # ABS_HAT0X
             old_x = self._dpad_x
             self._dpad_x = raw_value  # -1, 0, or 1
             
-            # D-pad left = button 11, D-pad right = button 12
             if old_x != self._dpad_x:
-                if old_x == -1 and self.on_button_change:
-                    self.on_button_change(11, False)  # D-pad left released
-                if old_x == 1 and self.on_button_change:
-                    self.on_button_change(12, False)  # D-pad right released
-                
-                if self._dpad_x == -1 and self.on_button_change:
-                    self.on_button_change(11, True)   # D-pad left pressed
-                if self._dpad_x == 1 and self.on_button_change:
-                    self.on_button_change(12, True)   # D-pad right pressed
+                self._update_hat()
         
         elif axis_code == 17:  # ABS_HAT0Y
             old_y = self._dpad_y
             self._dpad_y = raw_value  # -1, 0, or 1
             
-            # D-pad up = button 13, D-pad down = button 14
             if old_y != self._dpad_y:
-                if old_y == -1 and self.on_button_change:
-                    self.on_button_change(13, False)  # D-pad up released
-                if old_y == 1 and self.on_button_change:
-                    self.on_button_change(14, False)  # D-pad down released
-                
-                if self._dpad_y == -1 and self.on_button_change:
-                    self.on_button_change(13, True)   # D-pad up pressed
-                if self._dpad_y == 1 and self.on_button_change:
-                    self.on_button_change(14, True)   # D-pad down pressed
+                self._update_hat()
+
+    def _update_hat(self) -> None:
+        """Convert D-pad X/Y state to HAT direction (0-7 or 0x0F for center)."""
+        # HAT switch encoding:
+        # 0=N, 1=NE, 2=E, 3=SE, 4=S, 5=SW, 6=W, 7=NW, 0x0F=center
+        hat_map = {
+            ( 0, -1): 0,   # Up
+            ( 1, -1): 1,   # Up-Right
+            ( 1,  0): 2,   # Right
+            ( 1,  1): 3,   # Down-Right
+            ( 0,  1): 4,   # Down
+            (-1,  1): 5,   # Down-Left
+            (-1,  0): 6,   # Left
+            (-1, -1): 7,   # Up-Left
+            ( 0,  0): 0x0F # Center
+        }
         
-        # Handle triggers (could map to buttons or axes)
-        elif axis_code in self.TRIGGER_MAP:
-            trigger_name = self.TRIGGER_MAP[axis_code]
-            
-            # Get the absolute info for proper scaling
-            abs_info = self._device.absinfo(axis_code)
-            
-            # Normalize to 0-32767 range (half of our axis range, since triggers are 0-max)
-            range_size = abs_info.max - abs_info.min
-            normalized = ((raw_value - abs_info.min) / range_size) * 32767
-            value = int(max(0, min(32767, normalized)))
-            
-            if self.verbose:
-                logger.debug(f"Trigger {trigger_name} = {value}")
-            
-            # For now, we could map triggers to buttons 15 when pressed past threshold
-            # Or we could use them to modulate axis values
-            # Let's map left trigger to button 15 when > 50% pressed
-            if trigger_name == 'left_trigger' and self.on_button_change:
-                if value > 16384:  # > 50%
-                    self.on_button_change(15, True)
-                else:
-                    self.on_button_change(15, False)
+        direction = hat_map.get((self._dpad_x, self._dpad_y), 0x0F)
+        
+        if self.verbose:
+            logger.debug(f"HAT = {direction:02X}")
+        
+        if self.on_hat_change:
+            self.on_hat_change(direction)
 
     @property
     def is_running(self) -> bool:
