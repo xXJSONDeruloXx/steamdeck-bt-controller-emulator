@@ -1153,10 +1153,13 @@ class GattApplication:
     def _send_keyboard_notification(self) -> None:
         """Send a keyboard report notification immediately."""
         if not self._notifying:
+            logger.debug("Not sending keyboard notification - not notifying")
             return
         
         report = self.get_keyboard_report()
         char_path = f"{self.APP_PATH}/service0/char3"
+        
+        logger.debug(f"Sending keyboard notification: modifiers={self._kbd_modifiers:#04x}, keys={[f'{k:#04x}' for k in self._kbd_keys]}")
         
         try:
             self.bus.emit_signal(
@@ -1173,6 +1176,7 @@ class GattApplication:
                     ),
                 ),
             )
+            logger.debug("Keyboard notification sent successfully")
         except Exception as e:
             logger.error(f"Error sending keyboard notification: {e}")
     

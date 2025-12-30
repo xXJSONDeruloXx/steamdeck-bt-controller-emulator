@@ -65,14 +65,16 @@ MOD_LGUI = 0x08
 class ControllerVisualizer(Gtk.Box):
     """Placeholder widget for controller tab."""
     
-    def __init__(self):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+    def __init__(self, gatt_app_getter):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.set_margin_top(50)
         self.set_margin_bottom(50)
         self.set_margin_start(50)
         self.set_margin_end(50)
         
-        # Just show info text
+        self.gatt_app_getter = gatt_app_getter
+        
+        # Info text
         info_label = Gtk.Label()
         info_label.set_markup(
             "<big>Controller Input Forwarding Active</big>\n\n"
@@ -81,6 +83,61 @@ class ControllerVisualizer(Gtk.Box):
         )
         info_label.set_justify(Gtk.Justification.CENTER)
         self.append(info_label)
+        
+        # On-screen buttons
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        button_box.set_halign(Gtk.Align.CENTER)
+        button_box.set_margin_top(30)
+        
+        # Home/Nexus button (sends Ctrl+1)
+        self.home_button = Gtk.Button(label="⌂ Home")
+        self.home_button.set_size_request(150, 60)
+        self.home_button.connect("clicked", self._send_home)
+        button_box.append(self.home_button)
+        
+        # QAM button (sends Ctrl+2)
+        self.qam_button = Gtk.Button(label="⋯ QAM")
+        self.qam_button.set_size_request(150, 60)
+        self.qam_button.connect("clicked", self._send_qam)
+        button_box.append(self.qam_button)
+        
+        self.append(button_box)
+    
+    def _send_home(self, button=None):
+        """Send Ctrl+1 for Home button."""
+        gatt_app = self.gatt_app_getter()
+        logger.info(f"Home button clicked. gatt_app={gatt_app}, notifying={gatt_app.notifying if gatt_app else 'N/A'}")
+        if gatt_app and gatt_app.notifying:
+            # Press the key chord
+            gatt_app._kbd_modifiers = MOD_LCTRL
+            gatt_app._kbd_keys = [0x1e, 0, 0, 0, 0, 0]  # '1' key
+            gatt_app._send_keyboard_notification()
+            logger.info("Home: Sent Ctrl+1 press")
+            # Release after 50ms
+            GLib.timeout_add(50, self._release_keys)
+    
+    def _send_qam(self, button=None):
+        """Send Ctrl+2 for QAM button."""
+        gatt_app = self.gatt_app_getter()
+        logger.info(f"QAM button clicked. gatt_app={gatt_app}, notifying={gatt_app.notifying if gatt_app else 'N/A'}")
+        if gatt_app and gatt_app.notifying:
+            # Press the key chord
+            gatt_app._kbd_modifiers = MOD_LCTRL
+            gatt_app._kbd_keys = [0x1f, 0, 0, 0, 0, 0]  # '2' key
+            gatt_app._send_keyboard_notification()
+            logger.info("QAM: Sent Ctrl+2 press")
+            # Release after 50ms
+            GLib.timeout_add(50, self._release_keys)
+    
+    def _release_keys(self):
+        """Release all keyboard keys."""
+        gatt_app = self.gatt_app_getter()
+        if gatt_app:
+            gatt_app._kbd_modifiers = 0
+            gatt_app._kbd_keys = [0, 0, 0, 0, 0, 0]
+            gatt_app._send_keyboard_notification()
+            logger.info("Released keyboard keys")
+        return False  # Don't repeat
         
     def update_state(self, buttons, axes, triggers, hat):
         """Placeholder method for compatibility."""
@@ -402,7 +459,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         notebook.set_vexpand(True)
         
         # Controller tab
-        self.visualizer = ControllerVisualizer()
+        self.visualizer = ControllerVisualizer(lambda: self._gatt_app)
         notebook.append_page(self.visualizer, Gtk.Label(label="Controller"))
         
         # Keyboard tab
@@ -652,7 +709,7 @@ class HoGApp(Gtk.Application):
 def main():
     """Main entrypoint for GUI."""
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,  # Changed to DEBUG for more verbose logging
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     )
     
