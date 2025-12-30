@@ -378,29 +378,59 @@ class VirtualTrackpad(Gtk.Box):
         self.gatt_app_getter = gatt_app_getter
         
         # Info label
-        info = Gtk.Label(label="Drag on the trackpad area to move the cursor")
+        info = Gtk.Label(label="Drag to move cursor • Tap to click • Scroll on right side")
         self.append(info)
         
-        # Trackpad area
+        # Main horizontal box for trackpad + scroll wheel
+        trackpad_container = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        
+        # Trackpad area (left side)
         self.trackpad = Gtk.DrawingArea()
         self.trackpad.set_size_request(500, 300)
+        self.trackpad.set_hexpand(True)
         self.trackpad.set_vexpand(True)
         self.trackpad.set_draw_func(self._draw_trackpad, None)
         
-        # Add event controllers
+        # Add drag controller for mouse movement
         drag_controller = Gtk.GestureDrag()
         drag_controller.connect("drag-update", self._on_drag_update)
         drag_controller.connect("drag-end", self._on_drag_end)
         self.trackpad.add_controller(drag_controller)
+        
+        # Add click controller for tap-to-click
+        click_controller = Gtk.GestureClick()
+        click_controller.connect("released", self._on_tap_click)
+        self.trackpad.add_controller(click_controller)
         
         # Track last position for delta calculation
         self._last_x = 0
         self._last_y = 0
         self._is_dragging = False
         
-        frame = Gtk.Frame()
-        frame.set_child(self.trackpad)
-        self.append(frame)
+        trackpad_frame = Gtk.Frame()
+        trackpad_frame.set_child(self.trackpad)
+        trackpad_container.append(trackpad_frame)
+        
+        # Scroll wheel area (right side)
+        self.scroll_area = Gtk.DrawingArea()
+        self.scroll_area.set_size_request(80, 300)
+        self.scroll_area.set_vexpand(True)
+        self.scroll_area.set_draw_func(self._draw_scroll_area, None)
+        
+        # Add drag controller for scroll wheel
+        scroll_drag_controller = Gtk.GestureDrag()
+        scroll_drag_controller.connect("drag-update", self._on_scroll_drag)
+        scroll_drag_controller.connect("drag-end", self._on_scroll_end)
+        self.scroll_area.add_controller(scroll_drag_controller)
+        
+        self._scroll_last_y = 0
+        self._is_scrolling = False
+        
+        scroll_frame = Gtk.Frame()
+        scroll_frame.set_child(self.scroll_area)
+        trackpad_container.append(scroll_frame)
+        
+        self.append(trackpad_container)
         
         # Mouse buttons
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -484,6 +514,75 @@ class VirtualTrackpad(Gtk.Box):
     def _on_drag_end(self, gesture, offset_x, offset_y):
         """Handle drag end."""
         self._is_dragging = False
+    
+    def _on_tap_click(self, gesture, n_press, x, y):
+        """Handle tap to click (left click)."""
+        # Only trigger if we didn't drag
+        if not self._is_dragging:
+            self._send_click(0x01)  # Left click
+    
+    def _draw_scroll_area(self, area, cr, width, height, user_data):
+        """Draw the scroll wheel area."""
+        # Background
+        cr.set_source_rgb(0.15, 0.15, 0.20)
+        cr.paint()
+        
+        # Border
+        cr.set_source_rgb(0.4, 0.4, 0.5)
+        cr.set_line_width(2)
+        cr.rectangle(2, 5, width - 4, height - 10)
+        cr.stroke()
+        
+        # Up arrow
+        cr.set_source_rgb(0.6, 0.6, 0.7)
+        cr.move_to(width/2, 30)
+        cr.line_to(width/2 - 10, 45)
+        cr.line_to(width/2 + 10, 45)
+        cr.close_path()
+        cr.fill()
+        
+        # Down arrow
+        cr.move_to(width/2, height - 30)
+        cr.line_to(width/2 - 10, height - 45)
+        cr.line_to(width/2 + 10, height - 45)
+        cr.close_path()
+        cr.fill()
+        
+        # Text
+        cr.select_font_face("Sans", 0, 1)
+        cr.set_font_size(11)
+        text = "Scroll"
+        extents = cr.text_extents(text)
+        cr.move_to(width/2 - extents.width/2, height/2 + extents.height/2)
+        cr.show_text(text)
+    
+    def _on_scroll_drag(self, gesture, offset_x, offset_y):
+        """Handle scroll wheel drag."""
+        if not self._is_scrolling:
+            self._is_scrolling = True
+            start_point = gesture.get_start_point()
+            self._scroll_last_y = start_point.y
+            return
+        
+        # Get current position
+        start_point = gesture.get_start_point()
+        current_y = start_point.y + offset_y
+        
+        # Calculate scroll delta
+        dy = current_y - self._scroll_last_y
+        
+        # Send scroll if moved enough (every 10 pixels)
+        if abs(dy) >= 10:
+            scroll_amount = int(dy / 10)
+            gatt_app = self.gatt_app_getter()
+            if gatt_app and gatt_app.notifying:
+                # Negative scroll for down, positive for up
+                gatt_app.send_mouse_movement(0, 0, 0, -scroll_amount)
+            self._scroll_last_y = current_y
+    
+    def _on_scroll_end(self, gesture, offset_x, offset_y):
+        """Handle scroll drag end."""
+        self._is_scrolling = False
     
     def _send_click(self, button_mask):
         """Send a mouse button click."""
