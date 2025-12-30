@@ -20,4 +20,4 @@ Project uses justfile for deployment. `just deploy` syncs to Steam Deck over SSH
 
 ## References
 
-EmuBTHID, BTGamepad, diyps3controller, GIMX 
+[EmuBTHID](https://github.com/Alkaid-Benetnash/EmuBTHID), [BTGamepad](https://github.com/007durgesh219/BTGamepad), [diyps3controller](https://github.com/rafikel/diyps3controller), [GIMX](https://github.com/matlo/GIMX) 
