@@ -215,7 +215,7 @@ echo "  - Desktop mode: Application menu"
 echo "  - Game mode: Add as non-Steam game"
 echo
 echo "Usage:"
-echo "  1. Launch the application (no password prompt!)"
+echo "  1. Launch the application"
 echo "  2. Click 'Start Service'"
 echo "  3. Connect from another device via Bluetooth"
 echo "  4. Your Steam Deck controller inputs will be forwarded"
