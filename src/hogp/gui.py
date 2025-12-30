@@ -156,24 +156,16 @@ class VirtualKeyboard(Gtk.Box):
         
         self.gatt_app_getter = gatt_app_getter
         
-        # Text entry
-        entry_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        entry_label = Gtk.Label(label="Type text:")
-        entry_box.append(entry_label)
-        
-        self.text_entry = Gtk.Entry()
-        self.text_entry.set_hexpand(True)
-        self.text_entry.set_placeholder_text("Enter text to send...")
-        entry_box.append(self.text_entry)
-        
-        send_button = Gtk.Button(label="Send Text")
-        send_button.connect("clicked", self._on_send_text)
-        entry_box.append(send_button)
-        
-        self.append(entry_box)
-        
         # Common keys
         keys_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        
+        # Row 0: F keys
+        row0 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        row0.set_homogeneous(True)
+        for i in range(1, 13):
+            btn = self._create_key_button(f'F{i}')
+            row0.append(btn)
+        keys_box.append(row0)
         
         # Row 1: Numbers
         row1 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
@@ -224,6 +216,35 @@ class VirtualKeyboard(Gtk.Box):
         keys_box.append(row6)
         
         self.append(keys_box)
+        
+        # Shortcut keys section
+        shortcuts_label = Gtk.Label(label="Shortcuts")
+        shortcuts_label.set_margin_top(10)
+        shortcuts_label.set_markup("<b>Shortcuts</b>")
+        self.append(shortcuts_label)
+        
+        shortcuts_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        shortcuts_box.set_halign(Gtk.Align.CENTER)
+        
+        # Common shortcuts
+        shortcuts = [
+            ('Copy', 'c', MOD_LCTRL),
+            ('Paste', 'v', MOD_LCTRL),
+            ('Cut', 'x', MOD_LCTRL),
+            ('Sel All', 'a', MOD_LCTRL),
+            ('Super', None, MOD_LGUI),
+        ]
+        
+        for label, key, modifier in shortcuts:
+            btn = Gtk.Button(label=label)
+            if key:
+                btn.connect("clicked", lambda b, k=key, m=modifier: self._send_shortcut(k, m))
+            else:
+                # Super key - just press modifier
+                btn.connect("clicked", lambda b, m=modifier: self._send_modifier_only(m))
+            shortcuts_box.append(btn)
+        
+        self.append(shortcuts_box)
     
     def _create_key_button(self, key):
         """Create a button for a keyboard key."""
@@ -243,30 +264,25 @@ class VirtualKeyboard(Gtk.Box):
         if key_code:
             gatt_app.send_key(key_code, 0)
     
-    def _on_send_text(self, button):
-        """Send text from entry field."""
-        text = self.text_entry.get_text()
-        if not text:
-            return
-        
+    def _send_shortcut(self, key, modifier):
+        """Send a keyboard shortcut (key + modifier)."""
         gatt_app = self.gatt_app_getter()
         if not gatt_app or not gatt_app.notifying:
             return
         
-        # Send each character with a small delay
-        for char in text:
-            char_lower = char.lower()
-            key_code = HID_KEY_CODES.get(char_lower) if char_lower != char else None
-            modifier = MOD_LSHIFT if char.isupper() or char in '!@#$%^&*()_+{}|:"<>?' else 0
-            
-            if not key_code:
-                key_code = HID_KEY_CODES.get(char)
-            
-            if key_code:
-                gatt_app.send_key(key_code, modifier)
-                GLib.usleep(50000)  # 50ms delay between keys
+        key_lower = key.lower()
+        key_code = HID_KEY_CODES.get(key_lower) or HID_KEY_CODES.get(key)
+        if key_code:
+            gatt_app.send_key(key_code, modifier)
+    
+    def _send_modifier_only(self, modifier):
+        """Send just a modifier key press (like Super key)."""
+        gatt_app = self.gatt_app_getter()
+        if not gatt_app or not gatt_app.notifying:
+            return
         
-        self.text_entry.set_text("")
+        # Send modifier with no key
+        gatt_app.send_key(0, modifier)
 
 
 class VirtualTrackpad(Gtk.Box):
