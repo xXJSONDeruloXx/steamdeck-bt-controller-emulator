@@ -55,6 +55,7 @@ HID_KEY_CODES = {
     'Left': 0x50, 'Right': 0x4f, 'Up': 0x52, 'Down': 0x51,
     # Media/Volume keys
     'VolUp': 0x80, 'VolDown': 0x81, 'Mute': 0x7f,
+    'PlayPause': 0xcd, 'Stop': 0xb7, 'NextTrack': 0xb5, 'PrevTrack': 0xb6,
 }
 
 # Modifier keys (bitmask)
@@ -247,24 +248,6 @@ class VirtualKeyboard(Gtk.Box):
             shortcuts_row1.append(btn)
         
         self.append(shortcuts_row1)
-        
-        # Second row: Volume controls
-        shortcuts_row2 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        shortcuts_row2.set_halign(Gtk.Align.CENTER)
-        shortcuts_row2.set_margin_top(4)
-        
-        shortcuts2 = [
-            ('Vol+', 'VolUp', 0),
-            ('Vol-', 'VolDown', 0),
-            ('Mute', 'Mute', 0),
-        ]
-        
-        for label, key, modifier in shortcuts2:
-            btn = Gtk.Button(label=label)
-            btn.connect("clicked", lambda b, k=key, m=modifier: self._send_shortcut(k, m))
-            shortcuts_row2.append(btn)
-        
-        self.append(shortcuts_row2)
     
     def _create_key_button(self, key):
         """Create a button for a keyboard key."""
@@ -303,6 +286,83 @@ class VirtualKeyboard(Gtk.Box):
         
         # Send modifier with no key
         gatt_app.send_key(0, modifier)
+
+
+class VirtualMediaControls(Gtk.Box):
+    """Virtual media controls widget that sends HID keyboard media keys."""
+    
+    def __init__(self, gatt_app_getter):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.set_margin_top(50)
+        self.set_margin_bottom(50)
+        self.set_margin_start(50)
+        self.set_margin_end(50)
+        
+        self.gatt_app_getter = gatt_app_getter
+        
+        # Title
+        title_label = Gtk.Label()
+        title_label.set_markup("<big><b>Media Controls</b></big>")
+        self.append(title_label)
+        
+        # Volume controls
+        volume_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        volume_box.set_halign(Gtk.Align.CENTER)
+        volume_box.set_margin_top(20)
+        
+        vol_down_btn = Gtk.Button(label="🔉 Vol Down")
+        vol_down_btn.set_size_request(150, 60)
+        vol_down_btn.connect("clicked", lambda b: self._send_media_key('VolDown'))
+        volume_box.append(vol_down_btn)
+        
+        mute_btn = Gtk.Button(label="🔇 Mute")
+        mute_btn.set_size_request(150, 60)
+        mute_btn.connect("clicked", lambda b: self._send_media_key('Mute'))
+        volume_box.append(mute_btn)
+        
+        vol_up_btn = Gtk.Button(label="🔊 Vol Up")
+        vol_up_btn.set_size_request(150, 60)
+        vol_up_btn.connect("clicked", lambda b: self._send_media_key('VolUp'))
+        volume_box.append(vol_up_btn)
+        
+        self.append(volume_box)
+        
+        # Playback controls
+        playback_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        playback_box.set_halign(Gtk.Align.CENTER)
+        playback_box.set_margin_top(20)
+        
+        prev_btn = Gtk.Button(label="⏮ Previous")
+        prev_btn.set_size_request(150, 60)
+        prev_btn.connect("clicked", lambda b: self._send_media_key('PrevTrack'))
+        playback_box.append(prev_btn)
+        
+        play_pause_btn = Gtk.Button(label="⏯ Play/Pause")
+        play_pause_btn.set_size_request(150, 60)
+        play_pause_btn.connect("clicked", lambda b: self._send_media_key('PlayPause'))
+        playback_box.append(play_pause_btn)
+        
+        stop_btn = Gtk.Button(label="⏹ Stop")
+        stop_btn.set_size_request(150, 60)
+        stop_btn.connect("clicked", lambda b: self._send_media_key('Stop'))
+        playback_box.append(stop_btn)
+        
+        next_btn = Gtk.Button(label="⏭ Next")
+        next_btn.set_size_request(150, 60)
+        next_btn.connect("clicked", lambda b: self._send_media_key('NextTrack'))
+        playback_box.append(next_btn)
+        
+        self.append(playback_box)
+    
+    def _send_media_key(self, key):
+        """Send a media key press."""
+        gatt_app = self.gatt_app_getter()
+        if not gatt_app or not gatt_app.notifying:
+            return
+        
+        key_code = HID_KEY_CODES.get(key)
+        if key_code:
+            gatt_app.send_key(key_code, 0)
 
 
 class VirtualTrackpad(Gtk.Box):
@@ -502,6 +562,10 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         # Keyboard tab
         self.keyboard = VirtualKeyboard(lambda: self._gatt_app)
         notebook.append_page(self.keyboard, Gtk.Label(label="Keyboard"))
+        
+        # Media controls tab
+        self.media = VirtualMediaControls(lambda: self._gatt_app)
+        notebook.append_page(self.media, Gtk.Label(label="Media"))
         
         # Trackpad tab
         self.trackpad = VirtualTrackpad(lambda: self._gatt_app)
