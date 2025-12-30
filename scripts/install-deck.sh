@@ -204,10 +204,8 @@ echo "=== Installation Complete! ==="
 echo
 
 if [ "${GROUPS_CHANGED:-false}" = true ]; then
-    echo "⚠ IMPORTANT: You were added to new groups (input, bluetooth)."
-    echo "   You MUST log out and log back in for changes to take effect!"
-    echo "   Or run: newgrp input && newgrp bluetooth"
-    echo
+    echo "⚠ Activating new group memberships..."
+    exec sg input -c "exec sg bluetooth -c 'echo; echo ✓ Groups activated; echo; echo The BT Controller Emulator now runs as a normal user (no root needed).; exec $SHELL'"
 fi
 
 echo "The BT Controller Emulator now runs as a normal user (no root needed)."

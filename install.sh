@@ -130,9 +130,8 @@ echo
 echo "=== Installation Complete ==="
 echo
 if [ "$GROUPS_CHANGED" = true ]; then
-    echo "⚠  Log out and back in for group changes to take effect"
-    echo "   Or run: newgrp input && newgrp bluetooth"
-    echo
+    echo "⚠  Activating new group memberships..."
+    exec sg input -c "exec sg bluetooth -c 'echo ✓ Groups activated. Launch BT Controller Emulator from your application menu; exec $SHELL'"
 fi
 echo "Launch 'BT Controller Emulator' from your application menu"
 echo
