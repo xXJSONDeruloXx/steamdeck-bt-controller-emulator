@@ -791,6 +791,14 @@ class HoGApp(Gtk.Application):
 
 def main():
     """Main entrypoint for GUI."""
+    import os
+    
+    # Allow running as root for Bluetooth access
+    # GTK4 normally blocks this, but we need root for BLE
+    if os.geteuid() == 0:
+        # Set environment to allow GTK as root
+        os.environ['GDK_BACKEND'] = 'x11'
+    
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",

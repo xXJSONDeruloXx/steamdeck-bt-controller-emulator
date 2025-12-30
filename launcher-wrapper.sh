@@ -10,6 +10,10 @@ echo "User: $USER" >> "$LOG_FILE"
 echo "Display: $DISPLAY" >> "$LOG_FILE"
 echo "---" >> "$LOG_FILE"
 
+# Allow GTK to run as root (needed for Bluetooth access)
+export GDK_BACKEND=x11
+export GTK_CSD=0
+
 # Run the GUI and capture output
 python3 "$@" 2>&1 | tee -a "$LOG_FILE"
 
