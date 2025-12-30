@@ -844,11 +844,41 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         try:
             logger.info("Starting USB Gadget HID in wired mode...")
             
+            # Check if USB gadget is already set up
+            import os
+            import subprocess
+            if not os.path.exists('/dev/hidg0'):
+                logger.info("USB gadget not configured, running setup script...")
+                GLib.idle_add(self._show_info, "Setting up USB gadget (requires password)...")
+                
+                # Find script directory (relative to this file)
+                script_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'scripts')
+                script_path = os.path.join(script_dir, 'setup-usb-gadget.sh')
+                
+                # Run setup script with pkexec (GUI sudo prompt)
+                try:
+                    result = subprocess.run(
+                        ['pkexec', 'bash', script_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    if result.returncode != 0:
+                        GLib.idle_add(self._show_error, f"USB gadget setup failed: {result.stderr}")
+                        return
+                    logger.info("USB gadget setup successful")
+                except subprocess.TimeoutExpired:
+                    GLib.idle_add(self._show_error, "USB gadget setup timed out")
+                    return
+                except Exception as e:
+                    GLib.idle_add(self._show_error, f"Failed to run setup script: {e}")
+                    return
+            
             # Create USB gadget HID instance
             self._usb_gadget = USBGadgetHID(verbose=False)
             
             if not self._usb_gadget.open():
-                GLib.idle_add(self._show_error, "Failed to open USB gadget devices. Run setup-usb-gadget.sh first.")
+                GLib.idle_add(self._show_error, "Failed to open USB gadget devices. Setup may have failed.")
                 return
             
             self._running = True
@@ -1039,6 +1069,11 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         logger.error(message)
         self.status_label.set_markup(f"<big><b>Error: {message}</b></big>")
         self.start_button.set_sensitive(True)
+    
+    def _show_info(self, message):
+        """Show info message."""
+        logger.info(message)
+        self.status_label.set_markup(f"<big><b>{message}</b></big>")
         self.stop_button.set_sensitive(False)
 
 
