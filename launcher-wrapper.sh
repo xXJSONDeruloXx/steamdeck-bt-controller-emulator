@@ -8,14 +8,17 @@ echo "=== BT Controller Emulator Log ===" > "$LOG_FILE"
 echo "Started at: $(date)" >> "$LOG_FILE"
 echo "User: $USER" >> "$LOG_FILE"
 echo "Display: $DISPLAY" >> "$LOG_FILE"
+echo "Working dir: $1" >> "$LOG_FILE"
 echo "---" >> "$LOG_FILE"
 
 # Allow GTK to run as root (needed for Bluetooth access)
 export GDK_BACKEND=x11
+export NO_AT_BRIDGE=1
 export GTK_CSD=0
 
-# Run the GUI and capture output
-python3 "$@" 2>&1 | tee -a "$LOG_FILE"
+# Change to project directory and run with correct module path
+cd "$1"
+python3 -m src.hogp.gui 2>&1 | tee -a "$LOG_FILE"
 
 EXIT_CODE=$?
 echo "---" >> "$LOG_FILE"

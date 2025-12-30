@@ -10,6 +10,15 @@ import sys
 import os
 import threading
 from typing import Optional
+
+# Set up environment for root access BEFORE importing GTK
+if os.geteuid() == 0:
+    os.environ['GDK_BACKEND'] = 'x11'
+    os.environ['NO_AT_BRIDGE'] = '1'  # Disable accessibility bus (fails as root)
+    # Ensure XAUTHORITY is set
+    if 'XAUTHORITY' not in os.environ:
+        os.environ['XAUTHORITY'] = '/home/deck/.Xauthority'
+
 import gi
 
 gi.require_version('Gtk', '4.0')
@@ -67,7 +76,7 @@ class ControllerVisualizer(Gtk.DrawingArea):
     def __init__(self):
         super().__init__()
         self.set_size_request(600, 400)
-        self.set_draw_func(self._draw_func)
+        self.set_draw_func(self._draw_func, None)
         
         # Controller state
         self.buttons = 0
@@ -358,7 +367,7 @@ class VirtualTrackpad(Gtk.Box):
         # Trackpad area
         self.trackpad = Gtk.DrawingArea()
         self.trackpad.set_size_request(600, 400)
-        self.trackpad.set_draw_func(self._draw_trackpad)
+        self.trackpad.set_draw_func(self._draw_trackpad, None)
         
         # Add event controllers
         drag_controller = Gtk.GestureDrag()
@@ -791,14 +800,6 @@ class HoGApp(Gtk.Application):
 
 def main():
     """Main entrypoint for GUI."""
-    import os
-    
-    # Allow running as root for Bluetooth access
-    # GTK4 normally blocks this, but we need root for BLE
-    if os.geteuid() == 0:
-        # Set environment to allow GTK as root
-        os.environ['GDK_BACKEND'] = 'x11'
-    
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",

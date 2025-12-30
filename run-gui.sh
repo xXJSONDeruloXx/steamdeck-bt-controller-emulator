@@ -23,7 +23,7 @@ echo
 echo "Logs will be written to: /tmp/bt-controller-emulator.log"
 echo
 
-pkexec env DISPLAY="${SAVED_DISPLAY}" XAUTHORITY="${SAVED_XAUTH}" bash -c "cd '$(pwd)' && ./launcher-wrapper.sh '$(pwd)/src/hogp/gui.py'"
+pkexec env DISPLAY="${SAVED_DISPLAY}" XAUTHORITY="${SAVED_XAUTH}" bash -c "cd '$(pwd)' && ./launcher-wrapper.sh '$(pwd)'"
 
 # Show log if it failed
 if [ $? -ne 0 ]; then
