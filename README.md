@@ -6,14 +6,6 @@ Emulates a Bluetooth LE or **Wired USB** gamepad peripheral that forwards contro
 
 This is a HID-over-GATT profile implementation using BlueZ D-Bus APIs for Bluetooth, plus USB Gadget (configfs) support for wired connections. Primarily built with Steam Deck and Steam OS in mind, but other linux devices could take advantage too, just be sure to install any dependencies the install script may complain about not having.
 
-## Features
-
-- **Dual Mode Operation**: Choose between Bluetooth wireless or USB-C wired connection
-- **Full HID Support**: Gamepad, Keyboard, Mouse/Trackpad all work in both modes
-- **Low Latency**: Sub-millisecond latency in wired mode
-- **Physical Input Forwarding**: Pass through your physical controller inputs
-- **Virtual Controls**: On-screen keyboard, media controls, and trackpad
-
 ## Installation
 
 Do Not Blindly Run Scripts You Find On The Internet! Review its contents first!

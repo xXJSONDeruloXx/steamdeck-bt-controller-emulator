@@ -87,19 +87,38 @@ mkdir -p "configs/${CONFIG_NAME}/strings/0x409"
 echo "${CONFIG_STRING}" > "configs/${CONFIG_NAME}/strings/0x409/configuration"
 echo "${MAX_POWER}" > "configs/${CONFIG_NAME}/MaxPower"
 
-# Create HID function (combined HID with Report IDs for gamepad, keyboard, mouse, touchpad)
-echo "Creating HID function..."
+# Create HID functions (3 separate interfaces for gamepad, keyboard, mouse)
+echo "Creating HID functions..."
+
+# Function 1: Gamepad
 mkdir -p functions/hid.usb0
-echo 0 > functions/hid.usb0/protocol  # 0 = none (report protocol)
+echo 1 > functions/hid.usb0/protocol  # 1 = keyboard/mouse boot protocol (use for gamepad)
 echo 0 > functions/hid.usb0/subclass  # 0 = no subclass
-echo 14 > functions/hid.usb0/report_length  # Max report length (gamepad is largest at 14 bytes)
+echo 14 > functions/hid.usb0/report_length  # Gamepad report size (13 bytes + Report ID removed = 13 bytes)
 
-# Write HID report descriptor as binary using Python script
-echo "Writing HID report descriptor..."
-python3 "${SCRIPT_DIR}/write-hid-descriptor.py" "${GADGET_DIR}/functions/hid.usb0/report_desc"
+# Function 2: Keyboard
+mkdir -p functions/hid.usb1
+echo 1 > functions/hid.usb1/protocol  # 1 = keyboard
+echo 1 > functions/hid.usb1/subclass  # 1 = boot interface
+echo 8 > functions/hid.usb1/report_length  # Keyboard report size (8 bytes without Report ID)
 
-# Link function to configuration
+# Function 3: Mouse
+mkdir -p functions/hid.usb2
+echo 2 > functions/hid.usb2/protocol  # 2 = mouse
+echo 1 > functions/hid.usb2/subclass  # 1 = boot interface
+echo 6 > functions/hid.usb2/report_length  # Mouse report size (6 bytes without Report ID)
+
+# Write HID report descriptors using Python script
+echo "Writing HID report descriptors..."
+python3 "${SCRIPT_DIR}/write-hid-descriptors.py" \
+    "${GADGET_DIR}/functions/hid.usb0/report_desc" \
+    "${GADGET_DIR}/functions/hid.usb1/report_desc" \
+    "${GADGET_DIR}/functions/hid.usb2/report_desc"
+
+# Link functions to configuration
 ln -s functions/hid.usb0 "configs/${CONFIG_NAME}/"
+ln -s functions/hid.usb1 "configs/${CONFIG_NAME}/"
+ln -s functions/hid.usb2 "configs/${CONFIG_NAME}/"
 
 # Find available UDC
 echo "Finding UDC (USB Device Controller)..."
@@ -121,12 +140,14 @@ echo "${UDC_DEVICE}" > UDC
 sleep 1
 
 # Check if HID devices were created
-if [ -c /dev/hidg0 ]; then
-    echo "✓ USB HID gadget device created successfully!"
-    echo "  - /dev/hidg0 (Combined HID: gamepad + keyboard + mouse + touchpad)"
+if [ -c /dev/hidg0 ] && [ -c /dev/hidg1 ] && [ -c /dev/hidg2 ]; then
+    echo "✓ USB HID gadget devices created successfully!"
+    echo "  - /dev/hidg0 (Gamepad)"
+    echo "  - /dev/hidg1 (Keyboard)"
+    echo "  - /dev/hidg2 (Mouse)"
     ls -l /dev/hidg*
 else
-    echo "Warning: /dev/hidg0 not created yet. It may take a few seconds."
+    echo "Warning: Not all HID devices created yet. They may take a few seconds."
 fi
 
 # Set permissions for hidg devices
@@ -137,8 +158,11 @@ chmod 666 /dev/hidg* 2>/dev/null || echo "Note: Run 'sudo chmod 666 /dev/hidg*' 
 echo
 echo "=== USB Gadget HID Setup Complete ==="
 echo
-echo "The Steam Deck will now appear as a USB HID device when connected via USB-C."
-echo "Write HID reports to /dev/hidg0 to send controller/keyboard/mouse inputs."
+echo "The Steam Deck will now appear as 3 separate USB HID devices when connected via USB-C."
+echo "Write HID reports to:"
+echo "  - /dev/hidg0 for gamepad input"
+echo "  - /dev/hidg1 for keyboard input"
+echo "  - /dev/hidg2 for mouse input"
 echo
 echo "To disable: Run cleanup-usb-gadget.sh or:"
 echo "  sudo echo \"\" > ${GADGET_DIR}/UDC"

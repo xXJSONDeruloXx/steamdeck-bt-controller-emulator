@@ -25,20 +25,28 @@ class USBGadgetHID:
     
     def __init__(
         self,
-        device: str = "/dev/hidg0",
+        gamepad_device: str = "/dev/hidg0",
+        keyboard_device: str = "/dev/hidg1",
+        mouse_device: str = "/dev/hidg2",
         verbose: bool = False,
     ):
         """
         Initialize USB gadget HID handler.
         
         Args:
-            device: Path to HID gadget device (combined with Report IDs)
+            gamepad_device: Path to HID gadget device for gamepad
+            keyboard_device: Path to HID gadget device for keyboard
+            mouse_device: Path to HID gadget device for mouse
             verbose: Enable verbose logging
         """
-        self.device = device
+        self.gamepad_device = gamepad_device
+        self.keyboard_device = keyboard_device
+        self.mouse_device = mouse_device
         self.verbose = verbose
         
-        self._fd: Optional[int] = None
+        self._gamepad_fd: Optional[int] = None
+        self._keyboard_fd: Optional[int] = None
+        self._mouse_fd: Optional[int] = None
         self._active = False
         
         # Current HID report state (mirrors gatt_app.py structure)
@@ -62,30 +70,47 @@ class USBGadgetHID:
 
     def open(self) -> bool:
         """
-        Open the HID gadget device for writing.
+        Open the HID gadget devices for writing.
         
         Returns:
-            True if successful, False otherwise
+            True if at least one device opened successfully, False otherwise
         """
         if self._active:
             logger.warning("USB gadget HID already open")
             return True
         
         try:
-            if not os.path.exists(self.device):
-                logger.error(f"HID gadget device not found: {self.device}")
-                return False
+            # Open gamepad device
+            if os.path.exists(self.gamepad_device):
+                self._gamepad_fd = os.open(self.gamepad_device, os.O_RDWR | os.O_NONBLOCK)
+                logger.info(f"Opened gamepad device: {self.gamepad_device} (fd={self._gamepad_fd})")
+            else:
+                logger.warning(f"Gamepad device not found: {self.gamepad_device}")
             
-            # Open device for writing
-            self._fd = os.open(self.device, os.O_RDWR | os.O_NONBLOCK)
-            logger.info(f"Opened HID gadget device: {self.device} (fd={self._fd})")
+            # Open keyboard device
+            if os.path.exists(self.keyboard_device):
+                self._keyboard_fd = os.open(self.keyboard_device, os.O_RDWR | os.O_NONBLOCK)
+                logger.info(f"Opened keyboard device: {self.keyboard_device} (fd={self._keyboard_fd})")
+            else:
+                logger.warning(f"Keyboard device not found: {self.keyboard_device}")
+            
+            # Open mouse device
+            if os.path.exists(self.mouse_device):
+                self._mouse_fd = os.open(self.mouse_device, os.O_RDWR | os.O_NONBLOCK)
+                logger.info(f"Opened mouse device: {self.mouse_device} (fd={self._mouse_fd})")
+            else:
+                logger.warning(f"Mouse device not found: {self.mouse_device}")
+            
+            if not any([self._gamepad_fd, self._keyboard_fd, self._mouse_fd]):
+                logger.error("No USB gadget devices available")
+                return False
             
             self._active = True
             logger.info("USB gadget HID opened successfully")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to open USB gadget device: {e}")
+            logger.error(f"Failed to open USB gadget devices: {e}")
             self.close()
             return False
 
@@ -104,18 +129,32 @@ class USBGadgetHID:
             self._gamepad_fd = None
         
     def close(self) -> None:
-        """Close the HID gadget device."""
+        """Close all HID gadget devices."""
         if not self._active:
             return
         
-        logger.info("Closing USB gadget HID device...")
+        logger.info("Closing USB gadget HID devices...")
         
-        if self._fd is not None:
+        if self._gamepad_fd is not None:
             try:
-                os.close(self._fd)
+                os.close(self._gamepad_fd)
             except Exception as e:
-                logger.warning(f"Error closing HID device: {e}")
-            self._fd = None
+                logger.warning(f"Error closing gamepad device: {e}")
+            self._gamepad_fd = None
+        
+        if self._keyboard_fd is not None:
+            try:
+                os.close(self._keyboard_fd)
+            except Exception as e:
+                logger.warning(f"Error closing keyboard device: {e}")
+            self._keyboard_fd = None
+        
+        if self._mouse_fd is not None:
+            try:
+                os.close(self._mouse_fd)
+            except Exception as e:
+                logger.warning(f"Error closing mouse device: {e}")
+            self._mouse_fd = None
         
         self._active = False
         logger.info("USB gadget HID closed")
@@ -200,30 +239,29 @@ class USBGadgetHID:
 
     def _send_gamepad_report(self) -> None:
         """Send gamepad HID report to USB gadget."""
-        if not self._active or self._fd is None:
+        if not self._active or self._gamepad_fd is None:
             return
         
         try:
-            # Build report matching gatt_app.py REPORT_MAP structure
-            # Report ID (1) + 2 bytes buttons + 8 bytes axes + 2 bytes triggers + 1 byte hat = 14 bytes
-            report = bytearray(14)
-            report[0] = 0x01  # Report ID
+            # Build report (NO Report ID byte - separate interface)
+            # 2 bytes buttons + 8 bytes axes + 2 bytes triggers + 1 byte hat = 13 bytes
+            report = bytearray(13)
             
             # Buttons (11 buttons in lower 11 bits of 2 bytes)
-            report[1] = self._buttons & 0xFF
-            report[2] = (self._buttons >> 8) & 0xFF
+            report[0] = self._buttons & 0xFF
+            report[1] = (self._buttons >> 8) & 0xFF
             
             # Axes (4 signed 16-bit values, little-endian)
-            struct.pack_into('<hhhh', report, 3, *self._axes)
+            struct.pack_into('<hhhh', report, 2, *self._axes)
             
             # Triggers (2 unsigned 8-bit values)
-            report[11] = self._triggers[0]
-            report[12] = self._triggers[1]
+            report[10] = self._triggers[0]
+            report[11] = self._triggers[1]
             
             # HAT switch
-            report[13] = self._hat
+            report[12] = self._hat
             
-            os.write(self._fd, bytes(report))
+            os.write(self._gamepad_fd, bytes(report))
             
             if self.verbose:
                 logger.debug(f"Gamepad report: {report.hex()}")
@@ -268,19 +306,18 @@ class USBGadgetHID:
 
     def _send_keyboard_report(self) -> None:
         """Send keyboard HID report to USB gadget."""
-        if not self._active or self._fd is None:
+        if not self._active or self._keyboard_fd is None:
             return
         
         try:
-            # Build report matching REPORT_MAP structure
-            # Report ID (2) + 1 byte modifiers + 1 byte reserved + 6 bytes keys = 9 bytes
-            report = bytearray(9)
-            report[0] = 0x02  # Report ID (keyboard is ID 2)
-            report[1] = self._kbd_modifiers
-            report[2] = self._kbd_reserved
-            report[3:9] = self._kbd_keys  # 6 keys
+            # Build report (NO Report ID byte - separate interface)
+            # 1 byte modifiers + 1 byte reserved + 6 bytes keys = 8 bytes
+            report = bytearray(8)
+            report[0] = self._kbd_modifiers
+            report[1] = self._kbd_reserved
+            report[2:8] = self._kbd_keys  # 6 keys
             
-            os.write(self._fd, bytes(report))
+            os.write(self._keyboard_fd, bytes(report))
             
             if self.verbose:
                 logger.debug(f"Keyboard report: {report.hex()}")
@@ -352,23 +389,22 @@ class USBGadgetHID:
 
     def _send_mouse_report(self) -> None:
         """Send mouse HID report to USB gadget."""
-        if not self._active or self._fd is None:
+        if not self._active or self._mouse_fd is None:
             return
         
         try:
-            # Build report matching REPORT_MAP structure
-            # Report ID (3) + 1 byte buttons + 2 bytes X + 2 bytes Y + 1 byte wheel = 7 bytes
-            report = bytearray(7)
-            report[0] = 0x03  # Report ID (mouse is ID 3)
-            report[1] = self._mouse_buttons
+            # Build report (NO Report ID byte - separate interface)
+            # 1 byte buttons + 2 bytes X + 2 bytes Y + 1 byte wheel = 6 bytes
+            report = bytearray(6)
+            report[0] = self._mouse_buttons
             
             # Pack signed 16-bit X and Y values (little-endian)
-            struct.pack_into('<hh', report, 2, self._mouse_x, self._mouse_y)
+            struct.pack_into('<hh', report, 1, self._mouse_x, self._mouse_y)
             
             # Pack signed 8-bit wheel value
-            report[6] = self._mouse_wheel & 0xFF
+            report[5] = self._mouse_wheel & 0xFF
             
-            os.write(self._fd, bytes(report))
+            os.write(self._mouse_fd, bytes(report))
             
             # Reset movement values after sending
             self._mouse_x = 0

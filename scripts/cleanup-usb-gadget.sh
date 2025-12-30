@@ -47,6 +47,8 @@ sleep 0.5
 # Remove function symlinks from configuration
 echo "Removing function links..."
 rm -f configs/c.1/hid.usb0 2>/dev/null || true
+rm -f configs/c.1/hid.usb1 2>/dev/null || true
+rm -f configs/c.1/hid.usb2 2>/dev/null || true
 
 # Remove configurations
 echo "Removing configurations..."
@@ -56,6 +58,8 @@ rmdir configs/c.1 2>/dev/null || true
 # Remove functions
 echo "Removing functions..."
 rmdir functions/hid.usb0 2>/dev/null || true
+rmdir functions/hid.usb1 2>/dev/null || true
+rmdir functions/hid.usb2 2>/dev/null || true
 
 # Remove strings
 echo "Removing strings..."

@@ -847,7 +847,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
             # Check if USB gadget is already set up
             import os
             import subprocess
-            if not os.path.exists('/dev/hidg0'):
+            if not (os.path.exists('/dev/hidg0') and os.path.exists('/dev/hidg1') and os.path.exists('/dev/hidg2')):
                 logger.info("USB gadget not configured, running setup script...")
                 GLib.idle_add(self._show_info, "Setting up USB gadget (requires password)...")
                 
@@ -894,7 +894,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         """Update UI for wired mode active state."""
         self.status_label.set_markup("<big><b>Status: Active - Wired USB</b></big>")
         self.connection_label.set_label("Connected via USB")
-        self.device_info_label.set_label("HID devices: /dev/hidg0")
+        self.device_info_label.set_label("HID devices: /dev/hidg0 (gamepad), /dev/hidg1 (keyboard), /dev/hidg2 (mouse)")
         self.stop_button.set_sensitive(True)
         # Start update loop
         self._update_timeout_id = GLib.timeout_add(50, self._update_visualizer)
