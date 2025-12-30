@@ -20,7 +20,7 @@ default:
 deploy:
     @echo "📦 Deploying to {{deck_user}}@{{deck_host}}:{{deck_path}}"
     ssh {{deck_user}}@{{deck_host}} "mkdir -p {{deck_path}}/src {{deck_path}}/scripts {{deck_path}}/config"
-    scp -r {{src_dir}}/hogp {{deck_user}}@{{deck_host}}:{{deck_path}}/src/
+    rsync -av --exclude='__pycache__' --exclude='*.pyc' {{src_dir}}/hogp {{deck_user}}@{{deck_host}}:{{deck_path}}/src/
     scp scripts/*.sh {{deck_user}}@{{deck_host}}:{{deck_path}}/scripts/
     scp config/* {{deck_user}}@{{deck_host}}:{{deck_path}}/config/
     @echo "✅ Deployment complete"
@@ -76,7 +76,7 @@ deploy-gui: deploy-quick run-gui
 # Install desktop launcher on Steam Deck
 install:
     @echo "📦 Installing desktop launcher on Steam Deck..."
-    ssh -t {{deck_user}}@{{deck_host}} "cd {{deck_path}} && ./install-deck.sh"
+    ssh -t {{deck_user}}@{{deck_host}} "cd {{deck_path}} && ./scripts/install-deck.sh"
     @echo "✅ Desktop launcher installed. Search for 'BT Controller Emulator' in app menu."
 
 # Reinstall after deployment
