@@ -1,10 +1,10 @@
 # Steamin Ma HoG
 
-Emulates a Bluetooth LE gamepad peripheral that forwards controller input from a Steam Deck to other devices. Not only that, but you also get full keyboard, trackpad, and media controls tabs. 
+Emulates a Bluetooth LE or **Wired USB** gamepad peripheral that forwards controller input from a Steam Deck to other devices. Not only that, but you also get full keyboard, trackpad, and media controls tabs. 
 
 ![controller view](assets/controller-tab.png) ![keyboard view](assets/keyboard-tab.png) ![media view](assets/media-tab.png) ![trackpad view](assets/trackpad-tab.png)
 
-This is a HID-over-GATT profile implementation using BlueZ D-Bus APIs. Primarily built with Steam Deck and Steam OS in mind, but other linux devices could take advantage too, just be sure to install any dependencies the install script may complain about not having.
+This is a HID-over-GATT profile implementation using BlueZ D-Bus APIs for Bluetooth, plus USB Gadget (configfs) support for wired connections. Primarily built with Steam Deck and Steam OS in mind, but other linux devices could take advantage too, just be sure to install any dependencies the install script may complain about not having.
 
 ## Installation
 
@@ -24,11 +24,29 @@ Update by running the same command. Uninstall with `cd ~/steamdeck-bt-controller
 
 ## Usage
 
+### Bluetooth Mode (Wireless)
+
 Launch from application menu, desktop shortcut or run `python3 -m src.hogp` directly. GUI provides connection management and input monitoring. 
 
-When application is open, press "Start Service", then on the device you want to control, open bluetooth settings. You shpuld either find something named SteamDeckPad or BlueZ 597. Connect to this and follow the prompts on both devices. 
+1. Select **Bluetooth** mode in the GUI
+2. Press "Start Service"
+3. On the device you want to control, open bluetooth settings
+4. Look for "SteamDeckPad" or "BlueZ 597" and connect
+5. Follow pairing prompts on both devices
 
-After a few seconds, the device should now recognize an hid controller over bluetooth, as well as a keyboard and mouse hid device. 
+After a few seconds, the device should now recognize an hid controller over bluetooth, as well as a keyboard and mouse hid device.
+
+### Wired Mode
+
+For ultra-low latency wired connection:
+
+1. Go into bios (hold + while booting up or in terminal run `systemctl reboot --firmware`)
+2. in Utility > Advanced > USB Config > USB Dual Role and set to `DRD`.
+2. Connect Steam Deck to target device with data usb c cable
+3. Select **Wired USB** mode in the GUI
+4. Press "Start Service" (input pass if asked)
+
+Your Steam Deck will appear as a USB HID controller/keyboard/mouse.
 
 CLI mode available for testing without `--gui` flag. Use `--forward /dev/input/eventX` to map physical controller.
 

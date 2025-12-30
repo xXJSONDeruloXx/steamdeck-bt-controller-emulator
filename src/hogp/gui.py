@@ -35,6 +35,7 @@ from hogp.bluez import (
 from hogp.gatt_app import GattApplication
 from hogp.adv import Advertisement
 from hogp.input_handler import InputHandler
+from hogp.usb_gadget import USBGadgetHID
 
 logger = logging.getLogger(__name__)
 
@@ -69,14 +70,14 @@ MOD_LGUI = 0x08
 class ControllerVisualizer(Gtk.Box):
     """Placeholder widget for controller tab."""
     
-    def __init__(self, gatt_app_getter):
+    def __init__(self, hid_output_getter):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.set_margin_top(50)
         self.set_margin_bottom(50)
         self.set_margin_start(50)
         self.set_margin_end(50)
         
-        self.gatt_app_getter = gatt_app_getter
+        self.hid_output_getter = hid_output_getter
         
         # Info text
         info_label = Gtk.Label()
@@ -109,37 +110,47 @@ class ControllerVisualizer(Gtk.Box):
     
     def _send_home(self, button=None):
         """Send Ctrl+1 for Home button."""
-        gatt_app = self.gatt_app_getter()
-        logger.info(f"Home button clicked. gatt_app={gatt_app}, notifying={gatt_app.notifying if gatt_app else 'N/A'}")
-        if gatt_app and gatt_app.notifying:
-            # Press the key chord
-            gatt_app._kbd_modifiers = MOD_LCTRL
-            gatt_app._kbd_keys = [0x1e, 0, 0, 0, 0, 0]  # '1' key
-            gatt_app._send_keyboard_notification()
-            logger.info("Home: Sent Ctrl+1 press")
-            # Release after 50ms
-            GLib.timeout_add(50, self._release_keys)
+        hid_output = self.hid_output_getter()
+        logger.info(f"Home button clicked. hid_output={hid_output}")
+        if hid_output:
+            if hasattr(hid_output, 'notifying') and hid_output.notifying:
+                # Bluetooth mode (GATT)
+                hid_output._kbd_modifiers = MOD_LCTRL
+                hid_output._kbd_keys = [0x1e, 0, 0, 0, 0, 0]  # '1' key
+                hid_output._send_keyboard_notification()
+                logger.info("Home: Sent Ctrl+1 press")
+                # Release after 50ms
+                GLib.timeout_add(50, self._release_keys)
+            elif hasattr(hid_output, 'send_key'):
+                # Wired mode (USB Gadget)
+                hid_output.send_key(0x1e, MOD_LCTRL)
+                logger.info("Home: Sent Ctrl+1 press (wired)")
     
     def _send_qam(self, button=None):
         """Send Ctrl+2 for QAM button."""
-        gatt_app = self.gatt_app_getter()
-        logger.info(f"QAM button clicked. gatt_app={gatt_app}, notifying={gatt_app.notifying if gatt_app else 'N/A'}")
-        if gatt_app and gatt_app.notifying:
-            # Press the key chord
-            gatt_app._kbd_modifiers = MOD_LCTRL
-            gatt_app._kbd_keys = [0x1f, 0, 0, 0, 0, 0]  # '2' key
-            gatt_app._send_keyboard_notification()
-            logger.info("QAM: Sent Ctrl+2 press")
-            # Release after 50ms
-            GLib.timeout_add(50, self._release_keys)
+        hid_output = self.hid_output_getter()
+        logger.info(f"QAM button clicked. hid_output={hid_output}")
+        if hid_output:
+            if hasattr(hid_output, 'notifying') and hid_output.notifying:
+                # Bluetooth mode (GATT)
+                hid_output._kbd_modifiers = MOD_LCTRL
+                hid_output._kbd_keys = [0x1f, 0, 0, 0, 0, 0]  # '2' key
+                hid_output._send_keyboard_notification()
+                logger.info("QAM: Sent Ctrl+2 press")
+                # Release after 50ms
+                GLib.timeout_add(50, self._release_keys)
+            elif hasattr(hid_output, 'send_key'):
+                # Wired mode (USB Gadget)
+                hid_output.send_key(0x1f, MOD_LCTRL)
+                logger.info("QAM: Sent Ctrl+2 press (wired)")
     
     def _release_keys(self):
         """Release all keyboard keys."""
-        gatt_app = self.gatt_app_getter()
-        if gatt_app:
-            gatt_app._kbd_modifiers = 0
-            gatt_app._kbd_keys = [0, 0, 0, 0, 0, 0]
-            gatt_app._send_keyboard_notification()
+        hid_output = self.hid_output_getter()
+        if hid_output and hasattr(hid_output, '_send_keyboard_notification'):
+            hid_output._kbd_modifiers = 0
+            hid_output._kbd_keys = [0, 0, 0, 0, 0, 0]
+            hid_output._send_keyboard_notification()
             logger.info("Released keyboard keys")
         return False  # Don't repeat
         
@@ -259,34 +270,41 @@ class VirtualKeyboard(Gtk.Box):
     
     def _send_key(self, key):
         """Send a single key press."""
-        gatt_app = self.gatt_app_getter()
-        if not gatt_app or not gatt_app.notifying:
+        hid_output = self.gatt_app_getter()
+        if not hid_output:
+            return
+        # Check if we can send (Bluetooth needs notifying, Wired is always ready)
+        if hasattr(hid_output, 'notifying') and not hid_output.notifying:
             return
         
         key_lower = key.lower()
         key_code = HID_KEY_CODES.get(key_lower) or HID_KEY_CODES.get(key)
         if key_code:
-            gatt_app.send_key(key_code, 0)
+            hid_output.send_key(key_code, 0)
     
     def _send_shortcut(self, key, modifier):
         """Send a keyboard shortcut (key + modifier)."""
-        gatt_app = self.gatt_app_getter()
-        if not gatt_app or not gatt_app.notifying:
+        hid_output = self.gatt_app_getter()
+        if not hid_output:
+            return
+        if hasattr(hid_output, 'notifying') and not hid_output.notifying:
             return
         
         key_lower = key.lower()
         key_code = HID_KEY_CODES.get(key_lower) or HID_KEY_CODES.get(key)
         if key_code:
-            gatt_app.send_key(key_code, modifier)
+            hid_output.send_key(key_code, modifier)
     
     def _send_modifier_only(self, modifier):
         """Send just a modifier key press (like Super key)."""
-        gatt_app = self.gatt_app_getter()
-        if not gatt_app or not gatt_app.notifying:
+        hid_output = self.gatt_app_getter()
+        if not hid_output:
+            return
+        if hasattr(hid_output, 'notifying') and not hid_output.notifying:
             return
         
         # Send modifier with no key
-        gatt_app.send_key(0, modifier)
+        hid_output.send_key(0, modifier)
 
 
 class VirtualMediaControls(Gtk.Box):
@@ -357,13 +375,15 @@ class VirtualMediaControls(Gtk.Box):
     
     def _send_media_key(self, key):
         """Send a media key press."""
-        gatt_app = self.gatt_app_getter()
-        if not gatt_app or not gatt_app.notifying:
+        hid_output = self.gatt_app_getter()
+        if not hid_output:
+            return
+        if hasattr(hid_output, 'notifying') and not hid_output.notifying:
             return
         
         key_code = HID_KEY_CODES.get(key)
         if key_code:
-            gatt_app.send_key(key_code, 0)
+            hid_output.send_key(key_code, 0)
 
 
 class VirtualTrackpad(Gtk.Box):
@@ -666,6 +686,25 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         header.set_title_widget(Gtk.Label(label="BT Controller Emulator"))
         self.set_titlebar(header)
         
+        # Mode selection
+        mode_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        mode_box.set_halign(Gtk.Align.CENTER)
+        
+        mode_label = Gtk.Label(label="Mode:")
+        mode_box.append(mode_label)
+        
+        self.bluetooth_radio = Gtk.CheckButton(label="Bluetooth")
+        self.bluetooth_radio.set_active(True)
+        self.bluetooth_radio.connect("toggled", self._on_bluetooth_toggled)
+        mode_box.append(self.bluetooth_radio)
+        
+        self.wired_radio = Gtk.CheckButton(label="Wired USB")
+        self.wired_radio.set_group(self.bluetooth_radio)
+        self.wired_radio.connect("toggled", self._on_wired_toggled)
+        mode_box.append(self.wired_radio)
+        
+        main_box.append(mode_box)
+        
         # Status box
         status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
         
@@ -686,20 +725,24 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         notebook = Gtk.Notebook()
         notebook.set_vexpand(True)
         
+        # Helper to get active HID output (either Bluetooth GATT or USB Gadget)
+        def get_hid_output():
+            return self._gatt_app or self._usb_gadget
+        
         # Controller tab
-        self.visualizer = ControllerVisualizer(lambda: self._gatt_app)
+        self.visualizer = ControllerVisualizer(get_hid_output)
         notebook.append_page(self.visualizer, Gtk.Label(label="Controller"))
         
         # Keyboard tab
-        self.keyboard = VirtualKeyboard(lambda: self._gatt_app)
+        self.keyboard = VirtualKeyboard(get_hid_output)
         notebook.append_page(self.keyboard, Gtk.Label(label="Keyboard"))
         
         # Media controls tab
-        self.media = VirtualMediaControls(lambda: self._gatt_app)
+        self.media = VirtualMediaControls(get_hid_output)
         notebook.append_page(self.media, Gtk.Label(label="Media"))
         
         # Trackpad tab
-        self.trackpad = VirtualTrackpad(lambda: self._gatt_app)
+        self.trackpad = VirtualTrackpad(get_hid_output)
         notebook.append_page(self.trackpad, Gtk.Label(label="Trackpad"))
         
         main_box.append(notebook)
@@ -721,11 +764,29 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         
         self.set_child(main_box)
     
+    def _on_bluetooth_toggled(self, button):
+        """Handle Bluetooth mode selection."""
+        if button.get_active() and not self._running:
+            self._mode = "bluetooth"
+            logger.info("Mode: Bluetooth")
+    
+    def _on_wired_toggled(self, button):
+        """Handle Wired mode selection."""
+        if button.get_active() and not self._running:
+            self._mode = "wired"
+            logger.info("Mode: Wired USB")
+    
     def _on_start_clicked(self, button):
         """Start the controller service."""
         self.start_button.set_sensitive(False)
+        self.bluetooth_radio.set_sensitive(False)
+        self.wired_radio.set_sensitive(False)
         self.status_label.set_markup("<big><b>Status: Starting...</b></big>")
-        threading.Thread(target=self._start_service, daemon=True).start()
+        
+        if self._mode == "bluetooth":
+            threading.Thread(target=self._start_bluetooth_service, daemon=True).start()
+        else:
+            threading.Thread(target=self._start_wired_service, daemon=True).start()
     
     def _on_stop_clicked(self, button):
         """Stop the controller service."""
@@ -733,7 +794,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         self.status_label.set_markup("<big><b>Status: Stopping...</b></big>")
         GLib.idle_add(self._stop_service)
     
-    def _start_service(self):
+    def _start_bluetooth_service(self):
         """Start the BLE HoG service (runs in thread)."""
         try:
             # Get D-Bus connection
@@ -775,8 +836,68 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
             GLib.idle_add(self._register_with_bluez)
             
         except Exception as e:
-            logger.error(f"Failed to start service: {e}")
+            logger.error(f"Failed to start bluetooth service: {e}")
             GLib.idle_add(self._show_error, f"Error: {e}")
+    
+    def _start_wired_service(self):
+        """Start the USB Gadget wired mode service (runs in thread)."""
+        try:
+            logger.info("Starting USB Gadget HID in wired mode...")
+            
+            # Check if USB gadget is already set up
+            import os
+            import subprocess
+            if not (os.path.exists('/dev/hidg0') and os.path.exists('/dev/hidg1') and os.path.exists('/dev/hidg2')):
+                logger.info("USB gadget not configured, running setup script...")
+                GLib.idle_add(self._show_info, "Setting up USB gadget (requires password)...")
+                
+                # Find script directory (relative to this file)
+                script_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'scripts')
+                script_path = os.path.join(script_dir, 'setup-usb-gadget.sh')
+                
+                # Run setup script with pkexec (GUI sudo prompt)
+                try:
+                    result = subprocess.run(
+                        ['pkexec', 'bash', script_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    if result.returncode != 0:
+                        GLib.idle_add(self._show_error, f"USB gadget setup failed: {result.stderr}")
+                        return
+                    logger.info("USB gadget setup successful")
+                except subprocess.TimeoutExpired:
+                    GLib.idle_add(self._show_error, "USB gadget setup timed out")
+                    return
+                except Exception as e:
+                    GLib.idle_add(self._show_error, f"Failed to run setup script: {e}")
+                    return
+            
+            # Create USB gadget HID instance
+            self._usb_gadget = USBGadgetHID(verbose=False)
+            
+            if not self._usb_gadget.open():
+                GLib.idle_add(self._show_error, "Failed to open USB gadget devices. Setup may have failed.")
+                return
+            
+            self._running = True
+            self._start_input_handler()
+            
+            GLib.idle_add(self._update_status_wired_active)
+            
+        except Exception as e:
+            logger.error(f"Failed to start wired service: {e}")
+            GLib.idle_add(self._show_error, f"Error: {e}")
+    
+    def _update_status_wired_active(self):
+        """Update UI for wired mode active state."""
+        self.status_label.set_markup("<big><b>Status: Active - Wired USB</b></big>")
+        self.connection_label.set_label("Connected via USB")
+        self.device_info_label.set_label("HID devices: /dev/hidg0 (gamepad), /dev/hidg1 (keyboard), /dev/hidg2 (mouse)")
+        self.stop_button.set_sensitive(True)
+        # Start update loop
+        self._update_timeout_id = GLib.timeout_add(50, self._update_visualizer)
     
     def _register_with_bluez(self):
         """Register application and advertisement with BlueZ."""
@@ -836,53 +957,67 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         """Handle button event from physical controller."""
         if self._gatt_app:
             self._gatt_app.set_button(index, pressed)
+        elif self._usb_gadget:
+            self._usb_gadget.set_button(index, pressed)
     
     def _on_axis(self, index, value):
         """Handle axis event from physical controller."""
         if self._gatt_app:
             self._gatt_app.set_axis(index, value)
+        elif self._usb_gadget:
+            self._usb_gadget.set_axis(index, value)
     
     def _on_trigger(self, index, value):
         """Handle trigger event from physical controller."""
         if self._gatt_app:
             self._gatt_app.set_trigger(index, value)
+        elif self._usb_gadget:
+            self._usb_gadget.set_trigger(index, value)
     
     def _on_hat(self, direction):
         """Handle HAT/D-pad event from physical controller."""
         if self._gatt_app:
             self._gatt_app.set_hat(direction)
+        elif self._usb_gadget:
+            self._usb_gadget.set_hat(direction)
     
     def _update_visualizer(self):
         """Update the controller visualization."""
-        if not self._running or not self._gatt_app:
+        if not self._running:
+            return False
+        
+        # Get active HID output
+        hid_output = self._gatt_app or self._usb_gadget
+        if not hid_output:
             return False
         
         self.visualizer.update_state(
-            self._gatt_app._buttons,
-            self._gatt_app._axes,
-            self._gatt_app._triggers,
-            self._gatt_app._hat,
+            hid_output._buttons,
+            hid_output._axes,
+            hid_output._triggers,
+            hid_output._hat,
         )
         
-        # Update connection status
-        if self._gatt_app.notifying:
-            # Query connected device info
-            if self._bus and self._adapter_path:
-                device_info = get_primary_connected_device(self._bus, self._adapter_path)
-                if device_info:
-                    self.connection_label.set_label("✓ Connected and sending data")
-                    self.device_info_label.set_markup(
-                        f"<b>Device:</b> {device_info['name']}\n"
-                        f"<b>Address:</b> {device_info['address']}"
-                    )
+        # Update connection status (Bluetooth mode only)
+        if self._gatt_app:
+            if self._gatt_app.notifying:
+                # Query connected device info
+                if self._bus and self._adapter_path:
+                    device_info = get_primary_connected_device(self._bus, self._adapter_path)
+                    if device_info:
+                        self.connection_label.set_label("✓ Connected and sending data")
+                        self.device_info_label.set_markup(
+                            f"<b>Device:</b> {device_info['name']}\n"
+                            f"<b>Address:</b> {device_info['address']}"
+                        )
+                    else:
+                        self.connection_label.set_label("✓ Sending data")
+                        self.device_info_label.set_label("")
                 else:
                     self.connection_label.set_label("✓ Sending data")
-                    self.device_info_label.set_label("")
-            else:
-                self.connection_label.set_label("✓ Sending data")
-        elif self._registered:
-            self.connection_label.set_label("Waiting for connection...")
-            self.device_info_label.set_label("")
+            elif self._registered:
+                self.connection_label.set_label("Waiting for connection...")
+                self.device_info_label.set_label("")
         
         return True
     
@@ -891,7 +1026,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         self.connection_label.set_label(text)
     
     def _stop_service(self):
-        """Stop the BLE HoG service."""
+        """Stop the HoG service (Bluetooth or Wired)."""
         self._running = False
         
         if self._update_timeout_id:
@@ -902,6 +1037,7 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
             self._input_handler.stop()
             self._input_handler = None
         
+        # Stop Bluetooth mode
         if self._registered and self._bus and self._adapter_path:
             unregister_advertisement_async(self._bus, self._adapter_path, Advertisement.ADV_PATH)
             unregister_application_async(self._bus, self._adapter_path, GattApplication.APP_PATH)
@@ -915,17 +1051,29 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
             self._gatt_app.unregister()
             self._gatt_app = None
         
+        # Stop Wired mode
+        if self._usb_gadget:
+            self._usb_gadget.close()
+            self._usb_gadget = None
+        
         self.status_label.set_markup("<big><b>Status: Stopped</b></big>")
         self.connection_label.set_label("Not connected")
         self.device_info_label.set_label("")
         self.start_button.set_sensitive(True)
         self.stop_button.set_sensitive(False)
+        self.bluetooth_radio.set_sensitive(True)
+        self.wired_radio.set_sensitive(True)
     
     def _show_error(self, message):
         """Show error message."""
         logger.error(message)
         self.status_label.set_markup(f"<big><b>Error: {message}</b></big>")
         self.start_button.set_sensitive(True)
+    
+    def _show_info(self, message):
+        """Show info message."""
+        logger.info(message)
+        self.status_label.set_markup(f"<big><b>{message}</b></big>")
         self.stop_button.set_sensitive(False)
 
 
