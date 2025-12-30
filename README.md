@@ -38,6 +38,8 @@ CLI mode available for testing without `--gui` flag. Use `--forward /dev/input/e
 
 - When pairing, be sure on both devices to affirm the pin matches when asked, generally I find acknowledging on the PC first, then steam deck second is the best way to go, but it shouldn't matter much
 
+- on first pair, you will probably have to jump into controller config settings in steam and do the mapping routine, things like triggers and bumpers may not map exactly right by default but all inputs are exposed so Steam can assign to the right places. skip guide and qam buttons, those are mapped inside the GUI rather than the physical controllers pass through (since the actual decks guide and qam are reserved for its nav needs).
+
 ## Development
 
 `just deploy` syncs to Steam Deck over SSH (be sure to change the ip). `just run` executes remotely. `just logs` tails system logs. Source in src/hogp includes bluez.py (D-Bus interface), gatt_app.py (HID service), input_handler.py (evdev forwarding), and gui.py (GTK4 interface).
