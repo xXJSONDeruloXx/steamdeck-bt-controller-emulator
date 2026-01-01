@@ -26,6 +26,7 @@ from .bluez import (
     set_static_ble_address,
     get_adapter_index,
     set_adapter_alias,
+    reset_adapter_to_default_state,
 )
 from .gatt_app import GattApplication
 from .adv import Advertisement
@@ -253,6 +254,14 @@ class HoGPeripheral:
             self._advertisement.unregister()
         if self._gatt_app:
             self._gatt_app.unregister()
+        
+        # Reset adapter to default state (restore normal Bluetooth operation)
+        if self._bus and self._adapter_path:
+            try:
+                reset_adapter_to_default_state(self._bus, self._adapter_path)
+                logger.info("Adapter restored to default state")
+            except Exception as e:
+                logger.warning(f"Could not reset adapter state: {e}")
         
         # Quit main loop
         if self._main_loop and self._main_loop.is_running():

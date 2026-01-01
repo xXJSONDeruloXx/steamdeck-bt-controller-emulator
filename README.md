@@ -8,19 +8,33 @@ This is a HID-over-GATT profile implementation using BlueZ D-Bus APIs for Blueto
 
 ## Installation
 
-Do Not Blindly Run Scripts You Find On The Internet! Review its contents first!
+**Do Not Blindly Run Scripts You Find On The Internet!** Review the contents first: [install.sh](install.sh)
 
-Copy the following script and paste into your terminal (konsole on Steam Deck).
+Copy the following command and paste into your terminal (konsole on Steam Deck):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xXJSONDeruloXx/steamdeck-bt-controller-emulator/main/install.sh | bash
 ```
 
-Installs to `~/steamdeck-bt-controller-emulator`. Creates desktop launcher, configures Bluetooth and input permissions. Log out and back in after first install.
+- Installs to `~/steamdeck-bt-controller-emulator`
+- Creates desktop launcher and shortcuts
+- Configures Bluetooth and input permissions
+- **Log out and back in after first install** for group changes to take effect
 
-I recommend right clicking/long pressing on the app or the desktop shortcut and adding to steam, from there you can take advantage of steam input for things like gyro, back buttons, dual trackpads etc.
+I recommend right clicking/long pressing on the app or desktop shortcut and adding to Steam. From there you can take advantage of Steam Input for gyro, back buttons, dual trackpads etc.
 
-Update by running the same command. Uninstall with `cd ~/steamdeck-bt-controller-emulator && ./uninstall.sh`.
+Run the same installation command to update to the latest version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xXJSONDeruloXx/steamdeck-bt-controller-emulator/main/install.sh | bash
+```
+
+### Uninstall
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xXJSONDeruloXx/steamdeck-bt-controller-emulator/main/uninstall.sh | bash
+```
+
 
 ## Usage
 
@@ -38,7 +52,7 @@ After a few seconds, the device should now recognize an hid controller over blue
 
 ### Wired Mode
 
-For ultra-low latency wired connection:
+For wired connection:
 
 1. Go into bios (hold + while booting up or in terminal run `systemctl reboot --firmware`)
 2. in Utility > Advanced > USB Config > USB Dual Role and set to `DRD`.

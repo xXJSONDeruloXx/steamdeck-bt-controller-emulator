@@ -442,3 +442,108 @@ def get_primary_connected_device(bus: Gio.DBusConnection, adapter_path: str) -> 
     """
     devices = get_connected_devices(bus, adapter_path)
     return devices[0] if devices else None
+
+
+def reset_adapter_to_default_state(bus: Gio.DBusConnection, adapter_path: str) -> bool:
+    """
+    Reset adapter properties to default state for normal Bluetooth operation.
+    
+    This should be called when the HoG service stops to restore the adapter
+    to its normal state, preventing interference with other Bluetooth devices
+    (especially audio devices like AirPods that need specific profiles).
+    
+    Sets:
+    - Discoverable: False (normal default)
+    - Pairable: True (allow new pairings)
+    - Powered: True (keep powered on)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    logger.info("Resetting adapter to default state...")
+    success = True
+    
+    # Set Discoverable to False (normal state)
+    if not set_adapter_property(bus, adapter_path, "Discoverable", GLib.Variant("b", False)):
+        logger.warning("Could not reset Discoverable property")
+        success = False
+    else:
+        logger.info("✓ Discoverable set to False")
+    
+    # Set Pairable to True (allow new pairings)
+    if not set_adapter_property(bus, adapter_path, "Pairable", GLib.Variant("b", True)):
+        logger.warning("Could not reset Pairable property")
+        success = False
+    else:
+        logger.info("✓ Pairable set to True")
+    
+    # Ensure adapter stays powered
+    if not set_adapter_property(bus, adapter_path, "Powered", GLib.Variant("b", True)):
+        logger.warning("Could not ensure adapter powered")
+        success = False
+    
+    if success:
+        logger.info("Adapter reset to default state successfully")
+    
+    return success
+
+
+def clear_static_ble_address(adapter_index: int = 0) -> bool:
+    """
+    Clear/reset the static BLE address to allow normal address rotation.
+    
+    This restores normal Bluetooth behavior and should be called during
+    uninstallation or when the service is no longer needed.
+    
+    Args:
+        adapter_index: BlueZ adapter index (0 for hci0, 1 for hci1, etc.)
+    
+    Returns:
+        True if successful or already cleared, False on error
+    """
+    try:
+        # Check if a static address is set
+        if not check_static_address_set(adapter_index):
+            logger.info(f"No static BLE address set for adapter {adapter_index}")
+            return True
+        
+        logger.info(f"Clearing static BLE address for adapter {adapter_index}...")
+        
+        # Power off adapter
+        subprocess.run(
+            ["sudo", "btmgmt", "--index", str(adapter_index), "power", "off"],
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+        
+        # Clear static address by setting it to 00:00:00:00:00:00
+        result = subprocess.run(
+            ["sudo", "btmgmt", "--index", str(adapter_index), "static-addr", "00:00:00:00:00:00"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        
+        # Power back on
+        subprocess.run(
+            ["sudo", "btmgmt", "--index", str(adapter_index), "power", "on"],
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+        
+        # Verify it was cleared
+        if not check_static_address_set(adapter_index):
+            logger.info(f"✓ Static BLE address cleared successfully")
+            return True
+        else:
+            logger.warning("Static address may not have been fully cleared")
+            return False
+            
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to clear static BLE address: {e}")
+        return False
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+        logger.warning(f"Could not clear static BLE address: {e}")
+        return False
