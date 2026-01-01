@@ -16,6 +16,9 @@ from gi.repository import Gio, GLib
 
 logger = logging.getLogger(__name__)
 
+# Default configuration
+DEFAULT_REPORT_RATE_HZ = 10
+
 # Standard UUIDs
 HID_SERVICE_UUID = "00001812-0000-1000-8000-00805f9b34fb"
 HID_INFO_UUID = "00002a4a-0000-1000-8000-00805f9b34fb"
@@ -217,7 +220,7 @@ class GattApplication:
         self._registrations: List[int] = []
         self._notifying = False
         self._notify_timeout_id: Optional[int] = None
-        self._report_rate_hz = 10
+        self._report_rate_hz = DEFAULT_REPORT_RATE_HZ
         
         # Current GAMEPAD report state (Report ID 1):
         # 1 byte: Report ID (0x01)

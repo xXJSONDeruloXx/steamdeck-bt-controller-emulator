@@ -26,12 +26,19 @@ from .bluez import (
     set_static_ble_address,
     get_adapter_index,
     set_adapter_alias,
+    reset_adapter_to_default_state,
 )
 from .gatt_app import GattApplication
 from .adv import Advertisement
 from .input_handler import InputHandler
 
 logger = logging.getLogger(__name__)
+
+# Default configuration constants
+DEFAULT_REPORT_RATE_HZ = 10
+DEFAULT_STATIC_BLE_ADDRESS = "C2:12:34:56:78:9A"
+DEFAULT_DEVICE_NAME = "SteamDeckHoG"
+DEFAULT_ADAPTER = "hci0"
 
 
 class HoGPeripheral:
@@ -44,10 +51,10 @@ class HoGPeripheral:
 
     def __init__(
         self,
-        name: str = "SteamDeckHoG",
-        rate: int = 10,
-        adapter: str = "hci0",
-        static_addr: Optional[str] = "C2:12:34:56:78:9A",
+        name: str = DEFAULT_DEVICE_NAME,
+        rate: int = DEFAULT_REPORT_RATE_HZ,
+        adapter: str = DEFAULT_ADAPTER,
+        static_addr: Optional[str] = DEFAULT_STATIC_BLE_ADDRESS,
         input_device: Optional[str] = None,
         verbose: bool = False,
     ):
@@ -254,6 +261,14 @@ class HoGPeripheral:
         if self._gatt_app:
             self._gatt_app.unregister()
         
+        # Reset adapter to default state (restore normal Bluetooth operation)
+        if self._bus and self._adapter_path:
+            try:
+                reset_adapter_to_default_state(self._bus, self._adapter_path)
+                logger.info("Adapter restored to default state")
+            except Exception as e:
+                logger.warning(f"Could not reset adapter state: {e}")
+        
         # Quit main loop
         if self._main_loop and self._main_loop.is_running():
             self._main_loop.quit()
@@ -441,19 +456,19 @@ Verification commands (run in another terminal):
     )
     parser.add_argument(
         "--name",
-        default="SteamDeckHoG",
-        help="Local name for advertisement (default: SteamDeckHoG)",
+        default=DEFAULT_DEVICE_NAME,
+        help=f"Local name for advertisement (default: {DEFAULT_DEVICE_NAME})",
     )
     parser.add_argument(
         "--rate",
         type=int,
-        default=10,
-        help="Notification rate in Hz (default: 10)",
+        default=DEFAULT_REPORT_RATE_HZ,
+        help=f"Notification rate in Hz (default: {DEFAULT_REPORT_RATE_HZ})",
     )
     parser.add_argument(
         "--adapter",
-        default="hci0",
-        help="Bluetooth adapter name (default: hci0)",
+        default=DEFAULT_ADAPTER,
+        help=f"Bluetooth adapter name (default: {DEFAULT_ADAPTER})",
     )
     parser.add_argument(
         "--input-device",
@@ -462,8 +477,8 @@ Verification commands (run in another terminal):
     )
     parser.add_argument(
         "--static-addr",
-        default="C2:12:34:56:78:9A",
-        help="Static BLE address to prevent duplicate controllers (default: C2:12:34:56:78:9A)",
+        default=DEFAULT_STATIC_BLE_ADDRESS,
+        help=f"Static BLE address to prevent duplicate controllers (default: {DEFAULT_STATIC_BLE_ADDRESS})",
     )
     parser.add_argument(
         "--no-static-addr",

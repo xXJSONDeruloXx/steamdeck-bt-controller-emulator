@@ -31,6 +31,7 @@ from hogp.bluez import (
     get_adapter_index,
     get_primary_connected_device,
     set_adapter_alias,
+    reset_adapter_to_default_state,
 )
 from hogp.gatt_app import GattApplication
 from hogp.adv import Advertisement
@@ -1050,6 +1051,14 @@ class HoGPeripheralGUI(Gtk.ApplicationWindow):
         if self._gatt_app:
             self._gatt_app.unregister()
             self._gatt_app = None
+        
+        # Reset adapter to default state (restore normal Bluetooth operation)
+        if self._bus and self._adapter_path:
+            try:
+                reset_adapter_to_default_state(self._bus, self._adapter_path)
+                logger.info("Adapter restored to default state")
+            except Exception as e:
+                logger.warning(f"Could not reset adapter state: {e}")
         
         # Stop Wired mode
         if self._usb_gadget:
