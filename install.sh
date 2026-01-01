@@ -2,7 +2,7 @@
 # One-line installer for BT Controller Emulator
 # Usage: curl -fsSL https://raw.githubusercontent.com/xXJSONDeruloXx/steamdeck-bt-controller-emulator/main/install.sh | bash
 
-set -e
+set -euo pipefail
 
 REPO_URL="https://github.com/xXJSONDeruloXx/steamdeck-bt-controller-emulator.git"
 INSTALL_DIR="$HOME/steamdeck-bt-controller-emulator"

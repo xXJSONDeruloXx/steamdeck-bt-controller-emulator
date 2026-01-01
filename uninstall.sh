@@ -2,7 +2,7 @@
 # Uninstaller for BT Controller Emulator
 # Usage: curl -fsSL https://raw.githubusercontent.com/xXJSONDeruloXx/steamdeck-bt-controller-emulator/main/uninstall.sh | bash
 
-set -e
+set -euo pipefail
 
 echo "=== BT Controller Emulator - Uninstaller ==="
 echo

@@ -6,7 +6,7 @@
 # setup-usb-gadget.sh
 #
 
-set -e
+set -euo pipefail
 
 GADGET_NAME="steamdeck_hid"
 GADGET_DIR="/sys/kernel/config/usb_gadget/${GADGET_NAME}"

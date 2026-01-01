@@ -338,6 +338,10 @@ def set_static_ble_address(
             check=True,
         )
         
+        # Wait for power off to complete
+        import time
+        time.sleep(1)
+        
         # Set static address (use sudo)
         result = subprocess.run(
             ["sudo", "btmgmt", "--index", str(adapter_index), "static-addr", address],
@@ -346,6 +350,9 @@ def set_static_ble_address(
             timeout=5,
             check=True,
         )
+        
+        # Wait for address to be set
+        time.sleep(1)
         
         # Power back on (use sudo)
         subprocess.run(

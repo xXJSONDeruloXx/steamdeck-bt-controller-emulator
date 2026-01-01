@@ -34,6 +34,12 @@ from .input_handler import InputHandler
 
 logger = logging.getLogger(__name__)
 
+# Default configuration constants
+DEFAULT_REPORT_RATE_HZ = 10
+DEFAULT_STATIC_BLE_ADDRESS = "C2:12:34:56:78:9A"
+DEFAULT_DEVICE_NAME = "SteamDeckHoG"
+DEFAULT_ADAPTER = "hci0"
+
 
 class HoGPeripheral:
     """
@@ -45,10 +51,10 @@ class HoGPeripheral:
 
     def __init__(
         self,
-        name: str = "SteamDeckHoG",
-        rate: int = 10,
-        adapter: str = "hci0",
-        static_addr: Optional[str] = "C2:12:34:56:78:9A",
+        name: str = DEFAULT_DEVICE_NAME,
+        rate: int = DEFAULT_REPORT_RATE_HZ,
+        adapter: str = DEFAULT_ADAPTER,
+        static_addr: Optional[str] = DEFAULT_STATIC_BLE_ADDRESS,
         input_device: Optional[str] = None,
         verbose: bool = False,
     ):
@@ -450,19 +456,19 @@ Verification commands (run in another terminal):
     )
     parser.add_argument(
         "--name",
-        default="SteamDeckHoG",
-        help="Local name for advertisement (default: SteamDeckHoG)",
+        default=DEFAULT_DEVICE_NAME,
+        help=f"Local name for advertisement (default: {DEFAULT_DEVICE_NAME})",
     )
     parser.add_argument(
         "--rate",
         type=int,
-        default=10,
-        help="Notification rate in Hz (default: 10)",
+        default=DEFAULT_REPORT_RATE_HZ,
+        help=f"Notification rate in Hz (default: {DEFAULT_REPORT_RATE_HZ})",
     )
     parser.add_argument(
         "--adapter",
-        default="hci0",
-        help="Bluetooth adapter name (default: hci0)",
+        default=DEFAULT_ADAPTER,
+        help=f"Bluetooth adapter name (default: {DEFAULT_ADAPTER})",
     )
     parser.add_argument(
         "--input-device",
@@ -471,8 +477,8 @@ Verification commands (run in another terminal):
     )
     parser.add_argument(
         "--static-addr",
-        default="C2:12:34:56:78:9A",
-        help="Static BLE address to prevent duplicate controllers (default: C2:12:34:56:78:9A)",
+        default=DEFAULT_STATIC_BLE_ADDRESS,
+        help=f"Static BLE address to prevent duplicate controllers (default: {DEFAULT_STATIC_BLE_ADDRESS})",
     )
     parser.add_argument(
         "--no-static-addr",
