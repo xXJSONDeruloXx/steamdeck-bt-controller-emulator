@@ -18,17 +18,11 @@ fi
 
 CURRENT_USER="$USER"
 
-# Check if git is available
-if ! command -v git &> /dev/null; then
-    echo "Error: git is not installed"
-    echo "Install with: sudo pacman -S git"
-    exit 1
-fi
-
 # Clone or update repository
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo "Updating existing installation..."
     cd "$INSTALL_DIR"
+    git stash -u
     git pull
 else
     echo "Installing to $INSTALL_DIR..."
